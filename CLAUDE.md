@@ -80,8 +80,8 @@ This is the exact JSON returned by `/printer/objects/query?stealth_autoloader`:
 - `num_paths` is dynamic (1–32). All per-path arrays have exactly `num_paths` elements.
 - **Never hardcode 6 paths.** Always use `num_paths` to slice arrays.
 - `entry_filament[n]` — filament present at the roll-feed entry of path N (autoloader end)
-- `extruder_filament[n]` — filament at extruder gears of toolhead N
-- `toolhead_filament[n]` — filament at toolhead sensor (nozzle end of Bowden tube)
+- `extruder_filament[n]` — filament at toolhead entry, before extruder gears
+- `toolhead_filament[n]` — filament past extruder gears, entering hotend
 - `path_color_hexes[n]` — hex string without `#`, e.g. `"1A2B3C"`. Empty string = no profile.
 - `cal_state` non-empty means calibration is in progress; `cal_prompt` has the current prompt text.
 
