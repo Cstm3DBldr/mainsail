@@ -8,38 +8,6 @@
             :collapsible="true"
             card-class="sa-status-panel">
             <v-card-text class="pa-0">
-                <!-- Calibration banner -->
-                <v-alert
-                    v-if="saIsCalibrating"
-                    type="warning"
-                    dense
-                    tile
-                    class="mb-0">
-                    <div class="text-subtitle-2 mb-2">{{ saStatus.cal_prompt }}</div>
-                    <v-row dense align="center">
-                        <v-col>
-                            <v-text-field
-                                v-model="calResponse"
-                                :label="$t('Panels.AutoloaderPanel.CalResponse')"
-                                dense
-                                outlined
-                                hide-details
-                                dark
-                                @keyup.enter="sendCalResponse" />
-                        </v-col>
-                        <v-col cols="auto">
-                            <v-btn
-                                small
-                                color="white"
-                                outlined
-                                :disabled="!calResponse.trim()"
-                                @click="sendCalResponse">
-                                {{ $t('Panels.AutoloaderPanel.Respond') }}
-                            </v-btn>
-                        </v-col>
-                    </v-row>
-                </v-alert>
-
                 <!-- Calibration toolbar — mirrors KlipperScreen's calibration panel -->
                 <div class="sa-cal-bar">
                     <v-btn small outlined class="sa-cal-btn" @click="openCalibration">
@@ -887,6 +855,58 @@
             </v-card>
         </v-dialog>
 
+        <!-- ─── PROMPT DIALOG (autoloader cal_prompt / unload confirm) ─── -->
+        <v-dialog v-model="promptOpen" max-width="420" persistent :retain-focus="false">
+            <v-card class="sa-dialog">
+                <v-card-title class="sa-dialog-title">
+                    <v-icon left size="18" color="warning">{{ mdiAlertCircleOutline }}</v-icon>
+                    <span class="subtitle-2">
+                        {{ $t('Panels.AutoloaderPanel.PromptTitle') }}
+                    </span>
+                </v-card-title>
+                <v-divider />
+                <v-card-text class="pa-4 sa-prompt-text">
+                    {{ saStatus.cal_prompt }}
+                </v-card-text>
+                <v-divider />
+                <v-card-actions class="px-3 py-2 flex-wrap sa-prompt-actions">
+                    <v-btn small class="sa-feed-btn ma-1" @click="sendPromptValue('yes')">
+                        {{ $t('Panels.AutoloaderPanel.Yes') }}
+                    </v-btn>
+                    <v-btn small class="sa-feed-btn ma-1" @click="sendPromptValue('no')">
+                        {{ $t('Panels.AutoloaderPanel.No') }}
+                    </v-btn>
+                    <v-btn small class="sa-feed-btn ma-1" @click="sendPromptValue('ok')">
+                        {{ $t('Panels.AutoloaderPanel.OK') }}
+                    </v-btn>
+                    <v-btn small class="sa-feed-btn ma-1" @click="sendPromptValue('continue')">
+                        {{ $t('Panels.AutoloaderPanel.Continue') }}
+                    </v-btn>
+                    <v-btn small class="sa-feed-btn ma-1" @click="sendPromptValue('cancel')">
+                        {{ $t('Panels.AutoloaderPanel.Cancel') }}
+                    </v-btn>
+                </v-card-actions>
+                <v-divider />
+                <v-card-actions class="px-3 py-2">
+                    <v-text-field
+                        v-model="calResponse"
+                        :label="$t('Panels.AutoloaderPanel.CalResponse')"
+                        dense
+                        outlined
+                        hide-details
+                        @keyup.enter="sendCalResponse" />
+                    <v-btn
+                        small
+                        color="primary"
+                        class="ml-2"
+                        :disabled="!calResponse.trim()"
+                        @click="sendCalResponse">
+                        {{ $t('Panels.AutoloaderPanel.Respond') }}
+                    </v-btn>
+                </v-card-actions>
+            </v-card>
+        </v-dialog>
+
         <!-- ─── COLOR PICKER DIALOG (for custom pie slices) ────── -->
         <v-dialog v-model="pickerOpen" max-width="320" :retain-focus="false">
             <v-card class="sa-dialog">
@@ -924,6 +944,7 @@ import {
     mdiCogOutline,
     mdiArrowLeft,
     mdiArrowRight,
+    mdiAlertCircleOutline,
 } from '@mdi/js'
 import axios from 'axios'
 import BaseMixin from '@/components/mixins/base'
@@ -939,6 +960,11 @@ interface SaColor {
     id: string
     name: string
     hex: string
+    /** Explicit fields from new-format brand cfgs — present once the catalog
+     *  provides them. When set, these win over name/line heuristics. */
+    color_type?: string
+    hex_2?: string
+    hex_3?: string
     /** Enrichment: 'single'|'dual'|'tri'|'gradient' derived from name/line. */
     mode?: 'single' | 'dual' | 'tri' | 'gradient'
     /** Enrichment: full hex list for single/dual/tri. Always includes base hex first. */
@@ -1100,9 +1126,30 @@ function namedColorToHex(word: string, fallback: string): string {
 function parseMultiColor(
     name: string,
     baseHex: string,
-    line?: SaProductLine
+    line?: SaProductLine,
+    explicit?: { color_type?: string; hex_2?: string; hex_3?: string }
 ): { mode: 'single' | 'dual' | 'tri' | 'gradient'; hexes: string[] } {
     const normBase = baseHex ? (baseHex.startsWith('#') ? baseHex : `#${baseHex}`) : ''
+    const norm = (h: string): string => (h ? (h.startsWith('#') ? h : `#${h}`) : '')
+
+    // EXPLICIT fields from new-format brand cfgs win unconditionally — they
+    // carry actual hex values for each slice, not heuristic guesses.
+    if (explicit?.color_type) {
+        const t = explicit.color_type.toLowerCase()
+        const h2 = norm(explicit.hex_2 ?? '')
+        const h3 = norm(explicit.hex_3 ?? '')
+        if (t === 'tri' && h2 && h3) {
+            return { mode: 'tri', hexes: [normBase, h2, h3] }
+        }
+        if (t === 'dual' && h2) {
+            return { mode: 'dual', hexes: [normBase, h2] }
+        }
+        if (t === 'gradient') {
+            return { mode: 'gradient', hexes: h2 ? [normBase, h2] : [normBase] }
+        }
+        // color_type === 'single' (or unrecognized) → fall through to heuristics
+    }
+
     const ctx = `${line?.display_name ?? ''} ${line?.description ?? ''}`.toLowerCase()
 
     // Gradient context wins first — most specific product-line signal.
@@ -1165,6 +1212,12 @@ export default class SAStatusPanel extends Mixins(BaseMixin, SaMixin) {
     mdiCogOutline = mdiCogOutline
     mdiArrowLeft = mdiArrowLeft
     mdiArrowRight = mdiArrowRight
+    mdiAlertCircleOutline = mdiAlertCircleOutline
+
+    /** Auto-shown when the autoloader sets cal_state non-empty (calibration
+     *  prompts, unload-confirm prompts, etc.). Closes when the printer
+     *  clears cal_state. */
+    promptOpen = false
 
     // Calibration wizard state (mirrors KlipperScreen sa_calibration_guide)
     calOpen = false
@@ -1672,7 +1725,11 @@ export default class SAStatusPanel extends Mixins(BaseMixin, SaMixin) {
      */
     enrichColors(colors: SaColor[], line: SaProductLine): SaColor[] {
         return colors.map((c) => {
-            const info = parseMultiColor(c.name, c.hex, line)
+            const info = parseMultiColor(c.name, c.hex, line, {
+                color_type: c.color_type,
+                hex_2: c.hex_2,
+                hex_3: c.hex_3,
+            })
             return { ...c, mode: info.mode, hexes: info.hexes }
         })
     }
@@ -1831,6 +1888,22 @@ export default class SAStatusPanel extends Mixins(BaseMixin, SaMixin) {
         this.calResponse = ''
     }
 
+    /** Quick-action button — sends a fixed VALUE for the most common prompts
+     *  (yes/no/ok/continue/cancel) without making the user type. */
+    sendPromptValue(value: string): void {
+        this.saGcode(`SA_RESPOND VALUE=${value}`)
+        this.calResponse = ''
+    }
+
+    @Watch('saIsCalibrating', { immediate: true })
+    onCalStateChange(active: boolean): void {
+        // Auto-open the prompt dialog when the autoloader requests user
+        // input, auto-close when it clears. Persistent + non-dismissable
+        // to ensure the user always responds to a real printer prompt.
+        this.promptOpen = active
+        if (!active) this.calResponse = ''
+    }
+
     saveProfile(): void {
         if (this.pathModalIdx === null) return
         const i = this.pathModalIdx
@@ -1889,6 +1962,17 @@ export default class SAStatusPanel extends Mixins(BaseMixin, SaMixin) {
 </script>
 
 <style scoped>
+/* ── Prompt dialog body ──────────────────────────────────── */
+.sa-prompt-text {
+    font-size: 14px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.92);
+    white-space: pre-wrap;
+}
+.sa-prompt-actions {
+    background: rgba(255, 255, 255, 0.02);
+}
+
 /* ── Calibration toolbar ─────────────────────────────────── */
 .sa-cal-bar {
     display: flex;
@@ -1975,6 +2059,12 @@ export default class SAStatusPanel extends Mixins(BaseMixin, SaMixin) {
 /* ── Grid layout ─────────────────────────────────────────── */
 .sa-grid {
     width: 100%;
+    /* Establish a containment context so the narrow-mode rules below react
+       to the PANEL's own width, not the viewport. This means widescreen
+       middle/right columns (which are wider) keep the full layout, while
+       only the narrow leftmost widescreen column triggers compaction. */
+    container-type: inline-size;
+    container-name: sa-grid;
 }
 .sa-row {
     display: grid;
@@ -1983,6 +2073,36 @@ export default class SAStatusPanel extends Mixins(BaseMixin, SaMixin) {
     align-items: center;
     padding: 6px 12px;
 }
+
+/* Narrow-panel layout (widescreen leftmost column).
+   Drops the three sensor-dot columns — sensor state is still inspectable
+   from the controls popup when you tap the row. The Loadout chip stays
+   since it already conveys the combined sensor state via saEffectiveState.
+   Material/brand/color text is forced to single-line with ellipsis so it
+   never overflows the row height when the column is squeezed. */
+@container sa-grid (max-width: 540px) {
+    .sa-row {
+        /* minmax(0, 1fr) is critical — the default 1fr won't shrink below
+           the material cell's intrinsic content width, which is what was
+           pushing text off the right edge. */
+        grid-template-columns: 52px 22px minmax(0, 1fr) auto;
+        gap: 6px;
+    }
+    .sa-row > :nth-child(5),
+    .sa-row > :nth-child(6),
+    .sa-row > :nth-child(7) {
+        display: none;
+    }
+    .sa-material-cell {
+        min-width: 0;
+    }
+    .sa-material-cell > div {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
 .sa-center {
     display: flex;
     align-items: center;
