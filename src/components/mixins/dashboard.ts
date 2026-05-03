@@ -18,6 +18,7 @@ import {
     mdiMulticast,
 } from '@mdi/js'
 import { afcIconLogo } from '@/plugins/afcIcons'
+import { saSpoolIcon } from '@/plugins/saIcons'
 
 @Component
 export default class DashboardMixin extends BaseMixin {
@@ -79,6 +80,8 @@ export default class DashboardMixin extends BaseMixin {
                 return mdiMulticast
             case 'afc':
                 return afcIconLogo
+            case 'autoloader':
+                return saSpoolIcon
 
             default:
                 return mdiInformation

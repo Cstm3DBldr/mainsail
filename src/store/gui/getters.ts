@@ -97,6 +97,11 @@ export const getters: GetterTree<GuiState, RootState> = {
             allPanels = allPanels.filter((name) => name !== 'mmu')
         }
 
+        // remove autoloader panel, if no autoloader object exists in Klipper
+        if (!rootState.printer?.autoloader) {
+            allPanels = allPanels.filter((name) => name !== 'autoloader')
+        }
+
         // remove led_effects panel, if no led_effect object exists in Klipper
         const ledEffectsPrefix = 'led_effect '
         const existsLedEffects = Object.keys(rootState.printer ?? {}).some((name) =>

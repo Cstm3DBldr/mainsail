@@ -1,7 +1,7 @@
-# Stealth Autoloader — Mainsail Integration
+# Autoloader — Mainsail Integration
 
 ## Project Goal
-Add a Stealth Autoloader panel to Mainsail (https://github.com/mainsail-crew/mainsail).
+Add a Autoloader panel to Mainsail (https://github.com/mainsail-crew/mainsail).
 This panel shows live filament path status, per-path material/color, sensor states,
 and provides one-click load/unload triggers — all from the Mainsail web UI.
 
@@ -29,21 +29,21 @@ existing component/panel conventions.
 
 - **Printer IP:** 192.168.1.214
 - **Moonraker base URL:** `http://192.168.1.214`
-- **Klipper object query:** `GET /printer/objects/query?stealth_autoloader`
+- **Klipper object query:** `GET /printer/objects/query?autoloader`
 - **Klipper object subscribe:** Moonraker websocket `printer.objects.subscribe`
-  with `{"stealth_autoloader": null}`
+  with `{"autoloader": null}`
 - **Execute gcode:** `POST /printer/gcode/script` body: `{"script": "SA_LOAD TOOL=0"}`
 - **Moonraker websocket:** `ws://192.168.1.214/websocket`
 
 ---
 
-## stealth_autoloader Object — Full Status Shape
+## autoloader Object — Full Status Shape
 
-This is the exact JSON returned by `/printer/objects/query?stealth_autoloader`:
+This is the exact JSON returned by `/printer/objects/query?autoloader`:
 
 ```json
 {
-  "stealth_autoloader": {
+  "autoloader": {
     "num_paths": 6,
     "current_path": 0,
     "servo_engaged": false,
@@ -134,7 +134,7 @@ When `cal_state` is non-empty: show a dismissible banner at top of panel with:
    - `src/plugins/moonraker/` or wherever the websocket/HTTP client lives
 
 2. **Store module:** Create `src/store/modules/sa/` following the exact same
-   structure as `src/store/modules/printer/`. Subscribe to `stealth_autoloader`
+   structure as `src/store/modules/printer/`. Subscribe to `autoloader`
    via the existing Moonraker socket infrastructure — do NOT open a second socket.
 
 3. **Component:** `src/components/panels/SAStatusPanel.vue`
