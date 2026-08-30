@@ -2,8 +2,20 @@ import Vue from 'vue'
 import { ActionTree } from 'vuex'
 import { RootState } from '@/store/types'
 import { ServerSpoolmanState } from '@/store/server/spoolman/types'
+import { SpoolmanProxyResponse } from '@/types/moonraker/ServerRPC'
 
-function convertV2response(payload: { error?: { message: string } | null; response?: unknown }) {
+const LOG_PREFIX = '[Server][Spoolman]'
+const logDebug = (...args: unknown[]) => window.console.debug(LOG_PREFIX, ...args)
+const logError = (...args: unknown[]) => window.console.error(LOG_PREFIX, ...args)
+
+/*
+ * Unwrap a proxied Spoolman reply.
+ *
+ * With use_v2_response the payload is nested under `response` and a failure
+ * is reported in `error` rather than rejecting, so it has to be checked here.
+ * Returns null when Spoolman reported an error, having shown it to the user.
+ */
+function convertV2response(payload: SpoolmanProxyResponse): unknown {
     if ((payload.error?.message ?? null) !== null) {
         Vue.$toast.error(payload.error?.message ?? 'unknown spoolman error')
         return null
@@ -15,153 +27,136 @@ function convertV2response(payload: { error?: { message: string } | null; respon
     return payload
 }
 
+/* Fetch a path from Spoolman and unwrap the reply. */
+async function proxyGet(path: string, useV2 = true): Promise<unknown> {
+    const payload = await Vue.$socket.emitAndWait('server.spoolman.proxy', {
+        request_method: 'GET',
+        path,
+        use_v2_response: useV2,
+    })
+
+    return convertV2response(payload)
+}
+
 export const actions: ActionTree<ServerSpoolmanState, RootState> = {
-    reset({ commit }) {
+    reset({ commit }): void {
         commit('reset')
     },
 
-    init({ dispatch }) {
-        Vue.$socket.emit('server.spoolman.get_spool_id', {}, { action: 'server/spoolman/getActiveSpoolId' })
-        Vue.$socket.emit(
-            'server.spoolman.proxy',
-            {
-                request_method: 'GET',
-                path: '/v1/info',
-                use_v2_response: true,
-            },
-            { action: 'server/spoolman/getInfo' }
-        )
-        Vue.$socket.emit(
-            'server.spoolman.proxy',
-            {
-                request_method: 'GET',
-                path: '/v1/health',
-                use_v2_response: true,
-            },
-            { action: 'server/spoolman/getHealth' }
-        )
-        Vue.$socket.emit(
-            'server.spoolman.proxy',
-            {
-                request_method: 'GET',
-                path: '/v1/vendor',
-                use_v2_response: true,
-            },
-            { action: 'server/spoolman/getVendors' }
-        )
+    async init({ dispatch }): Promise<void> {
+        logDebug('init')
 
-        dispatch('socket/addInitModule', 'server/spoolman/getActiveSpoolId', { root: true })
-        dispatch('socket/addInitModule', 'server/spoolman/getHealth', { root: true })
-        dispatch('socket/addInitModule', 'server/spoolman/getInfo', { root: true })
-        dispatch('socket/addInitModule', 'server/spoolman/getVendors', { root: true })
+        // Independent requests, so they are issued together and reported
+        // separately rather than one failure hiding the others.
+        const results = await Promise.allSettled([
+            dispatch('loadActiveSpoolId'),
+            dispatch('loadInfo'),
+            dispatch('loadHealth'),
+            dispatch('loadVendors'),
+        ])
 
-        dispatch('socket/removeInitModule', 'server/spoolman/init', { root: true })
+        results.forEach((result) => {
+            if (result.status === 'rejected') logError('Init request failed:', result.reason)
+        })
 
-        // init load spools, but don't wait for it to finish
-        // this is needed because HappyHare or AFC need this data to display all spool data
+        // Load the spools without waiting. Happy Hare and AFC need this data
+        // to show spool details, but the list can be large and startup should
+        // not block on it.
         dispatch('refreshSpools')
     },
 
-    getActiveSpoolId({ commit, dispatch }, payload) {
-        commit('setActiveSpoolId', payload.spool_id)
-        dispatch('socket/removeInitModule', 'server/spoolman/getActiveSpoolId', { root: true })
+    async loadActiveSpoolId({ dispatch }): Promise<void> {
+        const { spool_id } = await Vue.$socket.emitAndWait('server.spoolman.get_spool_id')
+
+        await dispatch('applyActiveSpoolId', spool_id)
+    },
+
+    /*
+     * Store the active spool id and pull its details.
+     *
+     * Separate from loadActiveSpoolId because Moonraker also announces a
+     * change unprompted through notify_active_spool_set, which carries the
+     * new id and so does not need to be queried again.
+     */
+    async applyActiveSpoolId({ commit, dispatch }, spool_id: number | null): Promise<void> {
+        commit('setActiveSpoolId', spool_id)
 
         // also set active spool to null, if spool_id is 0 or null
-        if ([null, 0].includes(payload.spool_id)) {
+        if (spool_id === null || spool_id === 0) {
             commit('setActiveSpool', null)
             return
         }
 
-        Vue.$socket.emit(
-            'server.spoolman.proxy',
-            {
-                request_method: 'GET',
-                use_v2_response: true,
-                path: `/v1/spool/${payload.spool_id}`,
-            },
-            { action: 'server/spoolman/getActiveSpool' }
-        )
+        await dispatch('refreshActiveSpool')
     },
 
-    getActiveSpool({ commit }, payload) {
-        if ('requestParams' in payload) delete payload.requestParams
-        payload = convertV2response(payload)
-        if (payload === null) return
-
-        commit('setActiveSpool', payload)
+    async notifyActiveSpoolChanged({ dispatch }, payload: { spool_id: number | null }): Promise<void> {
+        await dispatch('applyActiveSpoolId', payload.spool_id)
     },
 
-    getHealth({ commit, dispatch }, payload) {
-        delete payload.requestParams
-        dispatch('socket/removeInitModule', 'server/spoolman/getHealth', { root: true })
+    async loadInfo({ commit }): Promise<void> {
+        const info = await proxyGet('/v1/info')
+        if (info === null) return
 
-        payload = convertV2response(payload)
-        if (payload === null) return
-
-        commit('setHealth', payload.status)
+        commit('setInfo', info)
     },
 
-    getInfo({ commit, dispatch }, payload) {
-        delete payload.requestParams
-        dispatch('socket/removeInitModule', 'server/spoolman/getInfo', { root: true })
-        payload = convertV2response(payload)
-        if (payload === null) return
+    async loadHealth({ commit }): Promise<void> {
+        const health = await proxyGet('/v1/health')
+        if (health === null) return
 
-        commit('setInfo', payload)
+        commit('setHealth', (health as { status: string }).status)
     },
 
-    getVendors({ commit, dispatch }, payload) {
-        delete payload.requestParams
-        dispatch('socket/removeInitModule', 'server/spoolman/getVendors', { root: true })
-        payload = convertV2response(payload)
-        if (payload === null) return
+    async loadVendors({ commit }): Promise<void> {
+        const vendors = await proxyGet('/v1/vendor')
+        if (vendors === null) return
 
         commit(
             'setVendors',
-            Object.entries(payload).map((value) => value)
+            Object.entries(vendors as Record<string, unknown>).map((value) => value)
         )
     },
 
-    refreshSpools({ dispatch }) {
-        Vue.$socket.emit(
-            'server.spoolman.proxy',
-            {
-                request_method: 'GET',
-                path: '/v1/spool',
-            },
-            { action: 'server/spoolman/getSpools' }
-        )
-
+    async refreshSpools({ commit, dispatch }): Promise<void> {
         dispatch('socket/addLoading', 'refreshSpools', { root: true })
+
+        try {
+            const spools = await proxyGet('/v1/spool', false)
+            if (spools === null) return
+
+            commit('setSpools', Object.entries(spools as Record<string, unknown>).map(([, spool]) => spool))
+        } catch (error) {
+            logError('Failed to load spools:', error)
+        } finally {
+            dispatch('socket/removeLoading', 'refreshSpools', { root: true })
+        }
     },
 
-    getSpools({ commit, dispatch }, payload) {
-        if ('requestParams' in payload) delete payload.requestParams
-        dispatch('socket/removeLoading', 'refreshSpools', { root: true })
-        payload = convertV2response(payload)
-        if (payload === null) return
-
-        const spools = Object.entries(payload).map((value) => value[1])
-        commit('setSpools', spools)
-    },
-
-    setActiveSpool(_, id: number | null) {
+    async setActiveSpool({ dispatch }, id: number | null): Promise<void> {
         const params: { spool_id?: number } = {}
         if (id !== null) params['spool_id'] = id
 
-        Vue.$socket.emit('server.spoolman.post_spool_id', params)
+        try {
+            await Vue.$socket.emitAndWait('server.spoolman.post_spool_id', params)
+        } catch (error) {
+            logError('Failed to set the active spool:', error)
+            return
+        }
+
+        await dispatch('loadActiveSpoolId')
     },
 
-    refreshActiveSpool({ state }) {
+    async refreshActiveSpool({ commit, state }): Promise<void> {
         if (state.active_spool_id === null) return
 
-        Vue.$socket.emit(
-            'server.spoolman.proxy',
-            {
-                request_method: 'GET',
-                path: `/v1/spool/${state.active_spool_id}`,
-            },
-            { action: 'server/spoolman/getActiveSpool' }
-        )
+        try {
+            const spool = await proxyGet(`/v1/spool/${state.active_spool_id}`)
+            if (spool === null) return
+
+            commit('setActiveSpool', spool)
+        } catch (error) {
+            logError('Failed to load the active spool:', error)
+        }
     },
 }
