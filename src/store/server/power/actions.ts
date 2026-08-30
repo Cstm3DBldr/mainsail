@@ -3,26 +3,33 @@ import { ActionTree } from 'vuex'
 import { ServerPowerState } from '@/store/server/power/types'
 import { RootState } from '@/store/types'
 
+const LOG_PREFIX = '[Server][Power]'
+const logDebug = (...args: unknown[]) => window.console.debug(LOG_PREFIX, ...args)
+const logError = (...args: unknown[]) => window.console.error(LOG_PREFIX, ...args)
+
 export const actions: ActionTree<ServerPowerState, RootState> = {
-    reset({ commit }) {
+    reset({ commit }): void {
         commit('reset')
     },
 
-    init() {
-        Vue.$socket.emit('machine.device_power.devices', {}, { action: 'server/power/getDevices' })
+    async init({ commit }): Promise<void> {
+        logDebug('init')
+
+        try {
+            const { devices } = await Vue.$socket.emitAndWait('machine.device_power.devices')
+            commit('setDevices', devices)
+
+            logDebug(`Loaded ${devices.length} power device(s)`)
+        } catch (error) {
+            logError('Failed to load power devices:', error)
+        }
     },
 
-    async getDevices({ commit, dispatch }, payload) {
-        if (!payload.error) await commit('setDevices', payload.devices)
-
-        await dispatch('socket/removeInitModule', 'server/power/init', { root: true })
-    },
-
-    getStatus({ commit }, payload) {
+    getStatus({ commit }, payload): void {
         if (!payload.error) commit('setStatus', payload)
     },
 
-    responseToggle({ commit }, payload) {
+    responseToggle({ commit }, payload): void {
         if ('requestParams' in payload) delete payload.requestParams
 
         for (const [key, value] of Object.entries(payload)) {

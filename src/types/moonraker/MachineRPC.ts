@@ -239,6 +239,30 @@ export interface MachineRPC {
         /** Array of discovered CAN UUID objects */
         can_uuids: CanDevice[]
     }>
+
+    /**
+     * Get a list of all configured power devices.
+     */
+    'machine.device_power.devices': () => Promise<{
+        /** Array of configured power devices */
+        devices: PowerDevice[]
+    }>
+}
+
+/**
+ * Power device reported by Moonraker.
+ */
+export interface PowerDevice {
+    /** Name of the device as configured in moonraker.conf */
+    device: string
+    /** Current state of the device */
+    status: 'off' | 'on' | 'error' | 'init'
+    /** Whether the device is locked from being toggled during a print */
+    locked_while_printing: boolean
+    /** The configured device type, e.g. `gpio`, `tplink_smartplug`, `shelly` */
+    type: string
+    /** Whether the device is toggled on when Klipper reports a shutdown */
+    is_shutdown?: boolean
 }
 
 /**
