@@ -150,6 +150,32 @@ export interface ServerRPC {
         /** Configured sensors, keyed by sensor id */
         sensors: Record<string, Sensor>
     }>
+
+    /**
+     * Get a list of current announcements and the feeds they came from.
+     */
+    'server.announcements.list': (params?: {
+        /** When true, include announcements the user has already dismissed */
+        include_dismissed?: boolean
+    }) => Promise<{
+        /** Current announcements, newest first */
+        entries: AnnouncementEntry[]
+        /** Names of the subscribed feeds */
+        feeds: string[]
+    }>
+
+    /**
+     * Dismiss an announcement, optionally only for a set time.
+     */
+    'server.announcements.dismiss': (params: {
+        /** The announcement to dismiss */
+        entry_id: string
+        /** Seconds until the announcement reappears. Omit to dismiss permanently. */
+        wake_time?: number
+    }) => Promise<{
+        /** The dismissed announcement's id */
+        entry_id: string
+    }>
 }
 
 /**
@@ -164,4 +190,35 @@ export interface Sensor {
     type: string
     /** Most recent measurement per field */
     values: Record<string, number>
+}
+
+/**
+ * Announcement reported by Moonraker's [announcements] component.
+ *
+ * Dates are unix timestamps in seconds; the store converts them to Date
+ * objects when applying the payload.
+ */
+export interface AnnouncementEntry {
+    /** Unique id of the announcement */
+    entry_id: string
+    /** Link to the full announcement */
+    url: string
+    /** Short headline */
+    title: string
+    /** Body text */
+    description: string
+    /** Announcement importance */
+    priority: 'normal' | 'high'
+    /** When the announcement was published */
+    date: number
+    /** Whether the user has dismissed it */
+    dismissed: boolean
+    /** When it was dismissed, if it was */
+    date_dismissed?: number | null
+    /** When a temporary dismissal expires */
+    dismiss_wake?: number | null
+    /** Where the announcement originated, e.g. `moonraker` */
+    source: string
+    /** The feed it was published in */
+    feed: string
 }
