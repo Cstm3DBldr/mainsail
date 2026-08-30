@@ -142,4 +142,26 @@ export interface ServerRPC {
         /** A unique identifier for this connection */
         websocket_id: number
     }>
+
+    /**
+     * Get a list of all configured sensors, keyed by sensor id.
+     */
+    'server.sensors.list': () => Promise<{
+        /** Configured sensors, keyed by sensor id */
+        sensors: Record<string, Sensor>
+    }>
+}
+
+/**
+ * Sensor reported by Moonraker's [sensor] component.
+ */
+export interface Sensor {
+    /** Display name configured for the sensor */
+    friendly_name: string
+    /** Sensor id, matching its key in the sensors object */
+    id: string
+    /** The configured sensor type, e.g. `mqtt` */
+    type: string
+    /** Most recent measurement per field */
+    values: Record<string, number>
 }
