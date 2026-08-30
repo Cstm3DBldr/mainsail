@@ -142,4 +142,60 @@ export interface ServerRPC {
         /** A unique identifier for this connection */
         websocket_id: number
     }>
+
+    /**
+     * Get the spool id Moonraker is currently tracking filament usage against.
+     */
+    'server.spoolman.get_spool_id': () => Promise<{
+        /** The active spool's id, or null when none is set */
+        spool_id: number | null
+    }>
+
+    /**
+     * Set the spool to track filament usage against.
+     */
+    'server.spoolman.post_spool_id': (params: {
+        /** The spool to make active. Omit to clear the active spool. */
+        spool_id?: number
+    }) => Promise<{
+        /** The active spool's id, or null when cleared */
+        spool_id: number | null
+    }>
+
+    /**
+     * Forward a request to the Spoolman server.
+     *
+     * Moonraker proxies rather than models the Spoolman API, so the response
+     * is whatever Spoolman returned and is narrowed by the caller.
+     *
+     * @see https://moonraker.readthedocs.io/en/latest/external_api/spoolman/
+     */
+    'server.spoolman.proxy': (params: {
+        /** HTTP method to use against the Spoolman server */
+        request_method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+        /** Path on the Spoolman server, e.g. `/v1/spool` */
+        path: string
+        /** Request body, for methods that take one */
+        body?: unknown
+        /**
+         * Wrap the reply so a Spoolman error is reported in the result rather
+         * than rejecting the RPC call. Without it a failing request is
+         * indistinguishable from an empty one.
+         */
+        use_v2_response?: boolean
+    }) => Promise<SpoolmanProxyResponse>
 }
+
+/**
+ * Reply to a server.spoolman.proxy request.
+ *
+ * With `use_v2_response` the payload is nested under `response` and any
+ * failure is reported in `error`. Without it, the reply is the proxied
+ * payload itself.
+ */
+export type SpoolmanProxyResponse = {
+    /** The proxied payload, present when use_v2_response was requested */
+    response?: unknown
+    /** Set when Spoolman reported a failure */
+    error?: { message: string } | null
+} & Record<string, unknown>
