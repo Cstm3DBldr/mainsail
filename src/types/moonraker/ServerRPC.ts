@@ -176,6 +176,43 @@ export interface ServerRPC {
         /** The dismissed announcement's id */
         entry_id: string
     }>
+
+    /**
+     * Get the current job queue and its state.
+     */
+    'server.job_queue.status': () => Promise<JobQueueStatus>
+
+    /**
+     * Add one or more files to the job queue.
+     *
+     * A filename may be repeated to queue the same file several times.
+     */
+    'server.job_queue.post_job': (params: {
+        /** Files to enqueue, relative to the gcodes root */
+        filenames: string[]
+        /** Replace the existing queue rather than appending to it */
+        reset?: boolean
+    }) => Promise<JobQueueStatus>
+
+    /**
+     * Remove jobs from the queue, either by id or all at once.
+     */
+    'server.job_queue.delete_job': (params: {
+        /** Ids of the jobs to remove. Ignored when `all` is set. */
+        job_ids?: string[]
+        /** Clear the whole queue */
+        all?: boolean
+    }) => Promise<JobQueueStatus>
+
+    /**
+     * Start processing the job queue.
+     */
+    'server.job_queue.start': () => Promise<JobQueueStatus>
+
+    /**
+     * Pause the job queue, leaving any running print alone.
+     */
+    'server.job_queue.pause': () => Promise<JobQueueStatus>
 }
 
 /**
@@ -221,4 +258,28 @@ export interface AnnouncementEntry {
     source: string
     /** The feed it was published in */
     feed: string
+}
+
+/**
+ * Job queue state, returned by every server.job_queue method.
+ */
+export interface JobQueueStatus {
+    /** Jobs waiting in the queue, in order */
+    queued_jobs: QueuedJob[]
+    /** Whether the queue is processing, paused, or idle */
+    queue_state: 'ready' | 'loading' | 'starting' | 'paused'
+}
+
+/**
+ * One entry of the job queue.
+ */
+export interface QueuedJob {
+    /** Path of the file, relative to the gcodes root */
+    filename: string
+    /** Unique id of this queue entry */
+    job_id: string
+    /** Unix timestamp when the job was queued */
+    time_added: number
+    /** Seconds the job has been waiting */
+    time_in_queue: number
 }
