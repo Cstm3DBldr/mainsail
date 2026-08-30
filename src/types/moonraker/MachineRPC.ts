@@ -239,6 +239,46 @@ export interface MachineRPC {
         /** Array of discovered CAN UUID objects */
         can_uuids: CanDevice[]
     }>
+
+    /**
+     * Get the current timelapse settings.
+     *
+     * Provided by the optional moonraker-timelapse component rather than
+     * Moonraker itself, so the settings are reported loosely — the store
+     * owns the narrowed shape.
+     *
+     * @see https://github.com/mainsail-crew/moonraker-timelapse
+     */
+    'machine.timelapse.get_settings': () => Promise<TimelapseSettings>
+
+    /**
+     * Update timelapse settings. Answers with the settings as stored, which
+     * may differ from what was sent if a value was rejected or normalised.
+     */
+    'machine.timelapse.post_settings': (params: Partial<TimelapseSettings>) => Promise<TimelapseSettings>
+
+    /**
+     * Get information about the most recently captured frame.
+     */
+    'machine.timelapse.lastframeinfo': () => Promise<{
+        /** Number of frames captured so far */
+        framecount: number
+        /** Filename of the most recent frame */
+        lastframefile: string
+    }>
+}
+
+/**
+ * Timelapse settings from the optional moonraker-timelapse component.
+ *
+ * Reported loosely: the component's settings vary by version, and echoing
+ * a request back includes a `requestParams` field that is not a setting.
+ */
+export interface TimelapseSettings extends Record<string, unknown> {
+    /** Whether timelapse capture is enabled */
+    enabled?: boolean
+    /** The webcam used to capture frames */
+    camera?: string
 }
 
 /**
