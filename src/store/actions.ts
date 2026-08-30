@@ -54,6 +54,6 @@ export const actions: ActionTree<RootState, RootState> = {
         if (payload.hostname) commit('socket/setData', { hostname: payload.hostname })
         if (payload.port) commit('socket/setData', { port: parseInt(payload.port.toString()) })
         if (payload.path) commit('socket/setData', { route_prefix: payload.path })
-        if (payload.customPanels) commit('gui/setCustomPanels', { customPanels: payload.customPanels })
+        if (payload.customPanels) commit('setConfigCustomPanels', payload.customPanels)
     },
 }

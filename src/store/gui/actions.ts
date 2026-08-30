@@ -2,7 +2,7 @@ import Vue from 'vue'
 import { ActionTree } from 'vuex'
 import { GuiState, GuiStateDashboard, GuiStateDashboardLayoutKey, GuiStateLayoutoption } from '@/store/gui/types'
 import { GuiPresetsStatePreset } from '@/store/gui/presets/types'
-import { RootState } from '@/store/types'
+import { ConfigJsonCustomPanel, RootState } from '@/store/types'
 import { getDefaultState } from './index'
 import { excludeKeys, themeDir } from '@/store/variables'
 import { deletePath, isRecord } from '@/plugins/helpers'
@@ -125,8 +125,8 @@ export const actions: ActionTree<GuiState, RootState> = {
      * would leave a permanently loading panel behind pointing at an
      * entryUrl that no longer resolves.
      */
-    async initCustomPanels({ commit, rootGetters, rootState }) {
-        const customPanels = rootState.gui?.view?.customPanels ?? []
+    async initCustomPanels({ commit, rootGetters }) {
+        const customPanels = rootGetters['gui/getCustomPanels'] as ConfigJsonCustomPanel[]
         const configuredIds = customPanels.map((panel) => panel.id)
         const defaultLayouts: { [viewport: string]: GuiStateDashboardLayoutKey } = {
             mobile: 'mobileLayout',

@@ -10,6 +10,7 @@ export interface RootState {
     naviDrawer: boolean | null
     instancesDB: 'moonraker' | 'browser' | 'json'
     configInstances: ConfigJsonInstance[]
+    configCustomPanels: ConfigJsonCustomPanel[]
 
     socket?: SocketState
     gui?: GuiState

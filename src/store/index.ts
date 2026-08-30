@@ -24,6 +24,7 @@ export const getDefaultState = (): RootState => {
         naviDrawer: null,
         instancesDB: 'moonraker',
         configInstances: [],
+        configCustomPanels: [],
     }
 }
 

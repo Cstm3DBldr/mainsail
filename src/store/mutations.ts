@@ -15,4 +15,8 @@ export const mutations: MutationTree<RootState> = {
     setConfigInstances(state, payload) {
         Vue.set(state, 'configInstances', payload)
     },
+
+    setConfigCustomPanels(state, payload) {
+        Vue.set(state, 'configCustomPanels', payload)
+    },
 }

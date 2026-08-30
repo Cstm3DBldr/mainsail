@@ -151,9 +151,4 @@ export const mutations: MutationTree<GuiState> = {
         }
     },
 
-    setCustomPanels(state, payload) {
-        if (payload.customPanels) {
-            Vue.set(state.view, 'customPanels', payload.customPanels)
-        }
-    },
 }

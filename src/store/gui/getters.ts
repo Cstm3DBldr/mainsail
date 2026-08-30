@@ -197,7 +197,30 @@ export const getters: GetterTree<GuiState, RootState> = {
         return false
     },
 
-    getCustomPanels: (state) => {
-        return state.view.customPanels;
+    /*
+     * Custom panels come from two places and both are valid at once:
+     *
+     *   config.json      deployment level, in Mainsail's web root. Good for
+     *                    Docker images and kiosks that ship a fixed set of
+     *                    panels. NOT durable: moonraker's update manager
+     *                    wipes the web root on a client update unless the
+     *                    file is listed under persistent_files, and the
+     *                    documented config for Mainsail does not list it.
+     *
+     *   Moonraker DB     the "mainsail" namespace, loaded by gui/init. This
+     *                    is the durable option and the one a plugin's
+     *                    installer should write to, since it survives both
+     *                    Mainsail updates and a reflash of the web root.
+     *
+     * Merged by id, with config.json taking precedence so an administrator
+     * can pin or override an entry that would otherwise come from the
+     * database.
+     */
+    getCustomPanels: (state, getters, rootState) => {
+        const fromDatabase = state.view.customPanels ?? []
+        const fromConfigJson = rootState.configCustomPanels ?? []
+        const configIds = fromConfigJson.map((panel) => panel.id)
+
+        return [...fromConfigJson, ...fromDatabase.filter((panel) => !configIds.includes(panel.id))]
     },
 }
