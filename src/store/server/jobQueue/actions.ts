@@ -3,32 +3,54 @@ import { ActionTree } from 'vuex'
 import { RootState } from '@/store/types'
 import { ServerJobQueueState, ServerJobQueueStateJob } from '@/store/server/jobQueue/types'
 
+const LOG_PREFIX = '[Server][JobQueue]'
+const logDebug = (...args: unknown[]) => window.console.debug(LOG_PREFIX, ...args)
+const logError = (...args: unknown[]) => window.console.error(LOG_PREFIX, ...args)
+
 export const actions: ActionTree<ServerJobQueueState, RootState> = {
-    reset({ commit }) {
+    reset({ commit }): void {
         commit('reset')
     },
 
-    init() {
-        Vue.$socket.emit('server.job_queue.status', {}, { action: 'server/jobQueue/getStatus' })
+    async init({ dispatch }): Promise<void> {
+        logDebug('init')
+
+        try {
+            const status = await Vue.$socket.emitAndWait('server.job_queue.status')
+            dispatch('getStatus', status)
+
+            logDebug(`Loaded ${status.queued_jobs?.length ?? 0} queued job(s)`)
+        } catch (error) {
+            logError('Failed to load job queue:', error)
+        }
     },
 
-    getEvent({ commit }, payload) {
+    getEvent({ commit }, payload): void {
         if ('updated_queue' in payload && payload.updated_queue !== null) commit('setQueuedJobs', payload.updated_queue)
         if ('queue_state' in payload) commit('setQueueState', payload.queue_state)
     },
 
-    async getStatus({ commit, dispatch }, payload) {
+    /*
+     * Apply a queue status payload to the store.
+     *
+     * Every server.job_queue method answers with this shape, so the actions
+     * below reuse it instead of waiting for the change notification.
+     */
+    getStatus({ commit }, payload): void {
         if ('queued_jobs' in payload) commit('setQueuedJobs', payload.queued_jobs)
         if ('queue_state' in payload) commit('setQueueState', payload.queue_state)
-
-        await dispatch('socket/removeInitModule', 'server/jobQueue/init', { root: true })
     },
 
-    async addToQueue(_, filenames: string[]) {
-        Vue.$socket.emit('server.job_queue.post_job', { filenames: filenames })
+    async addToQueue({ dispatch }, filenames: string[]): Promise<void> {
+        try {
+            const status = await Vue.$socket.emitAndWait('server.job_queue.post_job', { filenames })
+            dispatch('getStatus', status)
+        } catch (error) {
+            logError('Failed to add jobs to the queue:', error)
+        }
     },
 
-    changeCount({ dispatch, getters }, payload: { job_id: string; count: number }) {
+    changeCount({ dispatch, getters }, payload: { job_id: string; count: number }): void {
         const jobs: ServerJobQueueStateJob[] = getters['getJobs']
 
         const index = jobs.findIndex((job) => job.job_id === payload.job_id)
@@ -39,7 +61,7 @@ export const actions: ActionTree<ServerJobQueueState, RootState> = {
         dispatch('sendNewQueueList', { jobs })
     },
 
-    changePosition({ dispatch, getters }, payload: { oldIndex: number; newIndex: number }) {
+    changePosition({ dispatch, getters }, payload: { oldIndex: number; newIndex: number }): void {
         const jobs: ServerJobQueueStateJob[] = getters['getJobs']
 
         const job = jobs.splice(payload.oldIndex, 1)[0]
@@ -48,7 +70,7 @@ export const actions: ActionTree<ServerJobQueueState, RootState> = {
         dispatch('sendNewQueueList', { jobs })
     },
 
-    startByJobId({ dispatch, getters }, job_id: string) {
+    startByJobId({ dispatch, getters }, job_id: string): void {
         const jobs: ServerJobQueueStateJob[] = getters['getJobs']
 
         const index = jobs.findIndex((job) => job.job_id === job_id)
@@ -60,7 +82,16 @@ export const actions: ActionTree<ServerJobQueueState, RootState> = {
         dispatch('sendNewQueueList', { jobs, printStart: true })
     },
 
-    sendNewQueueList(_, payload: { jobs: ServerJobQueueStateJob[]; printStart?: boolean }) {
+    /*
+     * Replace the queue with the given job list.
+     *
+     * The queue is a flat list of filenames, so a job the user asked to run
+     * several times is expanded back out to one entry per run.
+     */
+    async sendNewQueueList(
+        { dispatch },
+        payload: { jobs: ServerJobQueueStateJob[]; printStart?: boolean }
+    ): Promise<void> {
         const filenames = payload.jobs
             .map((job) => {
                 const numJobs = (job.combinedIds?.length ?? 0) + 1
@@ -72,32 +103,55 @@ export const actions: ActionTree<ServerJobQueueState, RootState> = {
             })
             .flat()
 
-        const emitOptions: { action?: string } = {}
-        if (payload.printStart) emitOptions.action = 'server/jobQueue/start'
+        try {
+            const status = await Vue.$socket.emitAndWait('server.job_queue.post_job', { filenames, reset: true })
+            dispatch('getStatus', status)
 
-        Vue.$socket.emit(
-            'server.job_queue.post_job',
-            {
-                filenames,
-                reset: true,
-            },
-            emitOptions
-        )
+            // Only start once the reordered queue is in place, so the job the
+            // user picked is the one that runs.
+            if (payload.printStart) await dispatch('start')
+        } catch (error) {
+            logError('Failed to update the job queue:', error)
+        }
     },
 
-    deleteFromQueue(_, job_ids: string[]) {
-        Vue.$socket.emit('server.job_queue.delete_job', { job_ids })
+    async deleteFromQueue({ dispatch }, job_ids: string[]): Promise<void> {
+        try {
+            const status = await Vue.$socket.emitAndWait('server.job_queue.delete_job', { job_ids })
+            dispatch('getStatus', status)
+        } catch (error) {
+            logError('Failed to remove jobs from the queue:', error)
+        }
     },
 
-    clearQueue() {
-        Vue.$socket.emit('server.job_queue.delete_job', { all: true })
+    async clearQueue({ dispatch }): Promise<void> {
+        try {
+            const status = await Vue.$socket.emitAndWait('server.job_queue.delete_job', { all: true })
+            dispatch('getStatus', status)
+        } catch (error) {
+            logError('Failed to clear the job queue:', error)
+        }
     },
 
-    start() {
-        Vue.$socket.emit('server.job_queue.start', {}, { loading: 'startJobqueue' })
+    async start({ dispatch }): Promise<void> {
+        try {
+            const status = await Vue.$socket.emitAndWait('server.job_queue.start', undefined, {
+                loading: 'startJobqueue',
+            })
+            dispatch('getStatus', status)
+        } catch (error) {
+            logError('Failed to start the job queue:', error)
+        }
     },
 
-    pause() {
-        Vue.$socket.emit('server.job_queue.pause', {}, { loading: 'pauseJobqueue' })
+    async pause({ dispatch }): Promise<void> {
+        try {
+            const status = await Vue.$socket.emitAndWait('server.job_queue.pause', undefined, {
+                loading: 'pauseJobqueue',
+            })
+            dispatch('getStatus', status)
+        } catch (error) {
+            logError('Failed to pause the job queue:', error)
+        }
     },
 }
