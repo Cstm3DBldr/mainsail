@@ -301,10 +301,12 @@ export default class HistoryStatisticsPanel extends Mixins(BaseMixin, HistoryMix
         return this.existsSelectedJobs ? this.selectedTotals : this.genericTotals
     }
 
-    refreshHistory() {
-        this.$store.dispatch('socket/addLoading', { name: 'historyLoadAll' })
-
-        this.$socket.emit('server.history.list', { start: 0, limit: 50 }, { action: 'server/history/getHistory' })
+    async refreshHistory() {
+        try {
+            await this.$store.dispatch('server/history/loadHistory')
+        } catch (error) {
+            window.console.error('[History] Failed to load complete history', error)
+        }
     }
 }
 </script>
