@@ -126,12 +126,15 @@ export default class UpdatePanel extends Mixins(BaseMixin) {
         return count > 1
     }
 
-    btnSync() {
-        this.$socket.emit(
-            'machine.update.status',
-            { refresh: true },
-            { action: 'server/updateManager/onUpdateStatus', loading: 'loadingBtnSyncUpdateManager' }
-        )
+    async btnSync() {
+        try {
+            await this.$store.dispatch('server/updateManager/refresh', {
+                refresh: true,
+                loading: 'loadingBtnSyncUpdateManager',
+            })
+        } catch (error) {
+            window.console.error('[UpdatePanel] Failed to refresh update status', error)
+        }
     }
 }
 </script>
