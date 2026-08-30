@@ -247,6 +247,33 @@ export interface MachineRPC {
         /** Array of configured power devices */
         devices: PowerDevice[]
     }>
+
+    /**
+     * Get the current update status of all configured software.
+     *
+     * The shape of each entry in `version_info` depends on its
+     * `configured_type`, so entries are reported loosely and narrowed by
+     * the caller.
+     */
+    'machine.update.status': (params?: {
+        /**
+         * Re-query the remotes rather than answering from Moonraker's cache.
+         * Slow, and rate limited by GitHub, so only request it when the user
+         * explicitly asks to refresh.
+         */
+        refresh?: boolean
+    }) => Promise<{
+        /** True while an update is in progress */
+        busy: boolean
+        /** GitHub API requests allowed per hour */
+        github_rate_limit: number
+        /** GitHub API requests remaining this hour */
+        github_requests_remaining: number
+        /** Unix timestamp when the GitHub rate limit resets */
+        github_limit_reset_time: number
+        /** Update state per configured application, keyed by name */
+        version_info: Record<string, UpdateStatusEntry>
+    }>
 }
 
 /**
@@ -263,6 +290,18 @@ export interface PowerDevice {
     type: string
     /** Whether the device is toggled on when Klipper reports a shutdown */
     is_shutdown?: boolean
+}
+
+/**
+ * One entry of `machine.update.status`'s `version_info`.
+ *
+ * Fields differ per `configured_type` — a git repo reports branch and commit
+ * details a web client does not, and the `system` entry reports packages
+ * instead of a version. Only the discriminator is guaranteed.
+ */
+export interface UpdateStatusEntry extends Record<string, unknown> {
+    /** The deploy type configured in moonraker.conf, e.g. `git_repo`, `zip`, `web`, `python` */
+    configured_type?: string
 }
 
 /**
