@@ -123,10 +123,32 @@ export const mutations: MutationTree<GuiState> = {
     },
 
     addPanel(state, payload) {
-        const panels = state.dashboard[payload.viewport as GuiStateDashboardLayoutKey];
+        const layoutKey = payload.viewport as GuiStateDashboardLayoutKey
+        const panels = [...(state.dashboard[layoutKey] as GuiStateLayoutoption[])]
         panels.push(payload.panel)
 
-        Vue.set(state.dashboard, payload.viewport, panels)
+        Vue.set(state.dashboard, layoutKey, panels)
+    },
+
+    /*
+     * Drop custom panel entries whose plugin is no longer configured.
+     * Sweeps every layout belonging to the viewport (e.g. desktopLayout1,
+     * desktopLayout2, ...) because the user may have moved the panel
+     * away from the layout it was originally added to.
+     */
+    removeStaleCustomPanels(state, payload: { viewport: string; configuredIds: string[] }) {
+        const layoutKeys = (Object.keys(state.dashboard) as GuiStateDashboardLayoutKey[]).filter((key) =>
+            key.startsWith(payload.viewport)
+        )
+
+        for (const layoutKey of layoutKeys) {
+            const panels = state.dashboard[layoutKey] as GuiStateLayoutoption[]
+            const kept = panels.filter(
+                (panel) => panel.name !== 'custom' || payload.configuredIds.includes(panel.config?.id ?? '')
+            )
+
+            if (kept.length !== panels.length) Vue.set(state.dashboard, layoutKey, kept)
+        }
     },
 
     setCustomPanels(state, payload) {

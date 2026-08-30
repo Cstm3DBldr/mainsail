@@ -115,29 +115,45 @@ export const actions: ActionTree<GuiState, RootState> = {
         await dispatch('socket/removeInitModule', 'gui/init', { root: true })
     },
 
+    /*
+     * Sync the dashboard layouts with the configured custom panels.
+     *
+     * Runs on every gui init. Adds a panel entry for each configured plugin
+     * that isn't placed yet, and drops entries whose plugin is no longer
+     * configured. The prune matters because layouts are persisted in the
+     * Moonraker database: without it, removing a plugin from the config
+     * would leave a permanently loading panel behind pointing at an
+     * entryUrl that no longer resolves.
+     */
     async initCustomPanels({ commit, rootGetters, rootState }) {
-        const customPanels = rootState.gui?.view?.customPanels ?? [];
-        const viewports = {
-            'mobile': 'mobileLayout',
-            'tablet': 'tabletLayout2',
-            'desktop': 'desktopLayout2',
-            'widescreen': 'widescreenLayout3',
-        };
+        const customPanels = rootState.gui?.view?.customPanels ?? []
+        const configuredIds = customPanels.map((panel) => panel.id)
+        const defaultLayouts: { [viewport: string]: GuiStateDashboardLayoutKey } = {
+            mobile: 'mobileLayout',
+            tablet: 'tabletLayout2',
+            desktop: 'desktopLayout2',
+            widescreen: 'widescreenLayout3',
+        }
 
-        for (const [viewport, defaultLayout] of Object.entries(viewports)) {
-            const panels = rootGetters['gui/getAllPanelsFromViewport'](viewport);
+        for (const [viewport, defaultLayout] of Object.entries(defaultLayouts)) {
+            const panels = rootGetters['gui/getAllPanelsFromViewport'](viewport) as GuiStateLayoutoption[]
+
+            commit('removeStaleCustomPanels', { viewport, configuredIds })
+
             for (const customPanel of customPanels) {
-                if (panels.some((panel: GuiStateLayoutoption) => panel.config?.id === customPanel.id)) {
-                    continue;
-                }
-                await commit('addPanel', {
+                const exists = panels.some(
+                    (panel) => panel.name === 'custom' && panel.config?.id === customPanel.id
+                )
+                if (exists) continue
+
+                commit('addPanel', {
                     viewport: defaultLayout,
                     panel: {
                         name: 'custom',
                         visible: true,
                         config: customPanel,
-                    }
-                });
+                    },
+                })
             }
         }
     },
