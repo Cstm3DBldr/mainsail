@@ -17,11 +17,7 @@ export default class StartPrintDialogTimelapse extends Mixins(BaseMixin) {
     }
 
     set timelapseEnabled(newVal) {
-        this.$socket.emit(
-            'machine.timelapse.post_settings',
-            { enabled: newVal },
-            { action: 'server/timelapse/initSettings' }
-        )
+        this.$store.dispatch('server/timelapse/saveSetting', { enabled: newVal })
     }
 }
 </script>
