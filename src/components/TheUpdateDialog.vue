@@ -146,7 +146,7 @@ export default class TheUpdateDialog extends Mixins(BaseMixin) {
         return hours + ':' + minutes + ':' + seconds
     }
 
-    close() {
+    async close() {
         if (
             this.application !== null &&
             this.complete &&
@@ -157,11 +157,12 @@ export default class TheUpdateDialog extends Mixins(BaseMixin) {
         }
 
         this.$store.commit('server/updateManager/resetUpdateResponse')
-        this.$socket.emit(
-            'machine.update.status',
-            { refresh: false },
-            { action: 'server/updateManager/onUpdateStatus' }
-        )
+
+        try {
+            await this.$store.dispatch('server/updateManager/refresh')
+        } catch (error) {
+            window.console.error('[TheUpdateDialog] Failed to refresh update status', error)
+        }
     }
 
     @Watch('messages')
