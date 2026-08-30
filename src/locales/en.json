@@ -682,6 +682,11 @@
             "WeightSubtitle": "The weight of the filament in grams (without spool).",
             "WeightUsed": "{weight}g used"
         },
+        "CustomPanel": {
+            "LoadFailed": "Failed to load this plugin. Check the browser console for details.",
+            "NoDefaultExport": "This plugin bundle has no default export.",
+            "NoEntryUrl": "No entryUrl configured for this plugin."
+        },
         "ExtruderControlPanel": {
             "Allowed": "Allowed",
             "CleanNozzle": "Clean Nozzle",
