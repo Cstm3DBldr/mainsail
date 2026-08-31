@@ -2,7 +2,7 @@ import { GetterTree } from 'vuex'
 import { GuiState, GuiStateDashboard, GuiStateLayoutoption } from '@/store/gui/types'
 import { GuiMacrosStateMacrogroup } from '@/store/gui/macros/types'
 import { allDashboardPanels, defaultTheme, themes } from '@/store/variables'
-import { RootState, Theme } from '@/store/types'
+import { ConfigJsonCustomPanel, RootState, Theme } from '@/store/types'
 
 export const getters: GetterTree<GuiState, RootState> = {
     theme: (state): string => {
@@ -106,8 +106,12 @@ export const getters: GetterTree<GuiState, RootState> = {
             allPanels = allPanels.filter((name) => name !== 'led-effects')
         }
 
-        if (state.view.customPanels.length > 0) {
-            allPanels.push('custom');
+        // Via the getter, not state.view.customPanels: that holds only the
+        // entries restored from the database, so a panel declared in
+        // config.json would never reach allPanels and getPanels would filter
+        // it straight back out of every layout.
+        if ((getters['getCustomPanels'] as ConfigJsonCustomPanel[]).length > 0) {
+            allPanels.push('custom')
         }
 
         return allPanels
