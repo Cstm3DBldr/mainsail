@@ -1,0 +1,10 @@
+{
+    "en": {
+        "Panels": {
+            "ExamplePanelPlugin": {
+                "Extruder": "Extruder",
+                "QueryStatus": "Query status"
+            }
+        }
+    }
+}

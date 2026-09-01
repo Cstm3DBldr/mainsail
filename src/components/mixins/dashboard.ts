@@ -2,6 +2,7 @@ import Component from 'vue-class-component'
 import BaseMixin from '@/components/mixins/base'
 import { capitalize } from '@/plugins/helpers'
 import { GuiMacrosStateMacrogroup } from '@/store/gui/macros/types'
+import { ConfigJsonCustomPanel } from '@/store/types'
 import {
     mdiArrowCollapseVertical,
     mdiCodeTags,
@@ -19,6 +20,12 @@ import {
 } from '@mdi/js'
 import { afcIconLogo } from '@/plugins/afcIcons'
 
+/**
+ * Id half of a `custom_<id>` layout entry. Sliced rather than split so an id
+ * may itself contain an underscore, which a plugin author chooses freely.
+ */
+const customPanelId = (name: string): string => name.slice('custom_'.length)
+
 @Component
 export default class DashboardMixin extends BaseMixin {
     get macrogroups() {
@@ -29,9 +36,15 @@ export default class DashboardMixin extends BaseMixin {
         return this.$store.getters['gui/webcams/getWebcams'] ?? []
     }
 
-    getPanelName(name: string, config: { [key: string]: unknown }): string {
-        if (name === 'custom') {
-            return config['title'] ?? 'Custom panel'
+    get customPanels() {
+        return this.$store.getters['gui/getCustomPanels'] ?? []
+    }
+
+    getPanelName(name: string): string {
+        if (name.startsWith('custom_')) {
+            const panel = this.customPanels.find((entry: ConfigJsonCustomPanel) => entry.id === customPanelId(name))
+
+            return panel?.title ?? (this.$t('Panels.CustomPanel.Headline') as string)
         }
 
         if (name.startsWith('macrogroup_')) {
@@ -54,6 +67,12 @@ export default class DashboardMixin extends BaseMixin {
     }
 
     convertPanelnameToIcon(name: string): string {
+        if (name.startsWith('custom_')) {
+            const panel = this.customPanels.find((entry: ConfigJsonCustomPanel) => entry.id === customPanelId(name))
+
+            return panel?.icon || mdiInformation
+        }
+
         if (name.startsWith('macrogroup_')) return mdiCodeTags
 
         switch (name) {

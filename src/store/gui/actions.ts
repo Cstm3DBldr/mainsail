@@ -2,7 +2,7 @@ import Vue from 'vue'
 import { ActionTree } from 'vuex'
 import { GuiState, GuiStateDashboard, GuiStateDashboardLayoutKey, GuiStateLayoutoption } from '@/store/gui/types'
 import { GuiPresetsStatePreset } from '@/store/gui/presets/types'
-import { RootState } from '@/store/types'
+import { ConfigJsonCustomPanel, RootState } from '@/store/types'
 import { getDefaultState } from './index'
 import { excludeKeys, themeDir } from '@/store/variables'
 import { deletePath, isRecord } from '@/plugins/helpers'
@@ -111,35 +111,7 @@ export const actions: ActionTree<GuiState, RootState> = {
         }
 
         await commit('setData', payload.value)
-        await dispatch('initCustomPanels')
         await dispatch('socket/removeInitModule', 'gui/init', { root: true })
-    },
-
-    async initCustomPanels({ commit, rootGetters, rootState }) {
-        const customPanels = rootState.gui?.view?.customPanels ?? [];
-        const viewports = {
-            'mobile': 'mobileLayout',
-            'tablet': 'tabletLayout2',
-            'desktop': 'desktopLayout2',
-            'widescreen': 'widescreenLayout3',
-        };
-
-        for (const [viewport, defaultLayout] of Object.entries(viewports)) {
-            const panels = rootGetters['gui/getAllPanelsFromViewport'](viewport);
-            for (const customPanel of customPanels) {
-                if (panels.some((panel: GuiStateLayoutoption) => panel.config?.id === customPanel.id)) {
-                    continue;
-                }
-                await commit('addPanel', {
-                    viewport: defaultLayout,
-                    panel: {
-                        name: 'custom',
-                        visible: true,
-                        config: customPanel,
-                    }
-                });
-            }
-        }
     },
 
     /*

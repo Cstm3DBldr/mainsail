@@ -1,18 +1,20 @@
 <template>
     <panel
-        v-if="klipperReadyForGui"
+        v-if="klipperReadyForGui && config"
         :icon="config.icon"
         :title="config.title"
         :collapsible="config.collapsible"
-        :loading="!loadedComponent"
-        card-class="custom-panel">
+        :loading="!loadedComponent && !error"
+        :card-class="'custom_' + panelId + '_panel'">
+        <v-card-text v-if="error" class="error--text">
+            {{ error }}
+        </v-card-text>
         <component
             :is="loadedComponent"
-            v-if="loadedComponent"
+            v-else-if="loadedComponent"
             :panel-config="config"
             :panel-store="$store"
-            :panel-socket="$socket"
-        />
+            :panel-socket="$socket" />
     </panel>
 </template>
 
@@ -21,27 +23,47 @@ import { Component, Mixins, Prop } from 'vue-property-decorator'
 import Panel from '@/components/ui/Panel.vue'
 import BaseMixin from '@/components/mixins/base'
 import { ConfigJsonCustomPanel } from '@/store/types'
+
 @Component({
     components: { Panel },
 })
 export default class CustomPanel extends Mixins(BaseMixin) {
-    @Prop({ required: true, type: Object })
-    readonly config: ConfigJsonCustomPanel;
+    @Prop({ required: true }) declare readonly panelId: string
 
-    loadedComponent: null|object = null;
-    async created() {
-        await this.resolvePlugin();
+    loadedComponent: object | null = null
+    error: string | null = null
+
+    // Resolved from the registration rather than stored in the layout, so an
+    // edited title, icon or entryUrl takes effect.
+    get config(): ConfigJsonCustomPanel | undefined {
+        const panels = this.$store.getters['gui/getCustomPanels'] as ConfigJsonCustomPanel[]
+
+        return panels.find((panel) => panel.id === this.panelId)
     }
 
-    private async resolvePlugin() {
+    async created() {
+        const entryUrl = this.config?.entryUrl
+        if (!entryUrl) {
+            this.error = this.$t('Panels.CustomPanel.NoEntryUrl') as string
+
+            return
+        }
+
         try {
-            if (this.config.entryUrl) {
-                // Fetch the external ESM package at runtime
-                const module = await import(/* @vite-ignore */ this.config.entryUrl);
-                this.loadedComponent = module.default;
+            // Loaded at runtime: the plugin is built separately from Mainsail,
+            // so the host bundle stays untouched.
+            const module = await import(/* @vite-ignore */ entryUrl)
+
+            // Frozen so Vue's observer does not deep-walk a plugin's options
+            // object trying to make a component definition reactive.
+            this.loadedComponent = module.default ? Object.freeze(module.default) : null
+
+            if (!this.loadedComponent) {
+                this.error = this.$t('Panels.CustomPanel.NoDefaultExport') as string
             }
         } catch (error) {
-            window.console.error(`Failed to load custom panel: ${this.config.title}`, error);
+            window.console.error(`Failed to load custom panel "${this.config?.title}"`, error)
+            this.error = this.$t('Panels.CustomPanel.LoadFailed') as string
         }
     }
 }

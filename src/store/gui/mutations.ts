@@ -121,17 +121,4 @@ export const mutations: MutationTree<GuiState> = {
             payload.value
         )
     },
-
-    addPanel(state, payload) {
-        const panels = state.dashboard[payload.viewport as GuiStateDashboardLayoutKey];
-        panels.push(payload.panel)
-
-        Vue.set(state.dashboard, payload.viewport, panels)
-    },
-
-    setCustomPanels(state, payload) {
-        if (payload.customPanels) {
-            Vue.set(state.view, 'customPanels', payload.customPanels)
-        }
-    },
 }

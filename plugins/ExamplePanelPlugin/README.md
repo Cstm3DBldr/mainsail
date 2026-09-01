@@ -1,29 +1,58 @@
-Add this to your mainsail config to enable the plugin
+# Example panel plugin
+
+A minimal panel. Copy this directory, rename it, and edit.
+
+```bash
+npm install && npm run build
+```
+
+Produces one self-contained `dist/example-panel-plugin.js`. Serve it anywhere
+the browser can reach, then register it.
+
+## Registering
+
 ```json
 {
-  ...
-  "customPanels": [
-    {
-      "id": "example-panel-plugin",
-      "title": "Example panel plugin",
-      "icon": "",
-      "entryUrl": "http://localhost:8080/plugins/example-panel-plugin.mjs",
-      "collapsible": true
-    }
-  ],
-  ...
+    "id": "example",
+    "title": "Example",
+    "icon": "<24x24 svg path string>",
+    "entryUrl": "/plugins/example-panel-plugin.js",
+    "collapsible": true,
+    "requiresPrinterObject": "some_klipper_object"
 }
 ```
 
-For plugin to be usable **entryUrl** should be either hosted on the same server OR it 
-should come from server with CORS configuration that allows connection coming from 
-mainsail server domain
+Register in Moonraker's database (`namespace: mainsail`, key
+`view.customPanels`) or in `config.json`. Prefer the database: `config.json`
+lives in Mainsail's web root, which the update manager wipes, and it is a
+cacheable static file. Both are read; `config.json` wins on an id collision.
 
-Icons can be supplied using svg for example heres a bootstrap icon, you might need to add some style tags tough
-```json
-{
-    ...
-    "icon": "<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='currentColor' class='bi bi-heart' viewBox='0 0 16 16'><path d='m8 2.748-.717-.737C5.6.281 2.514.878 1.4 3.053c-.523 1.023-.641 2.5.314 4.385.92 1.815 2.834 3.989 6.286 6.357 3.452-2.368 5.365-4.542 6.286-6.357.955-1.886.838-3.362.314-4.385C13.486.878 10.4.28 8.717 2.01zM8 15C-7.333 4.868 3.279-3.04 7.824 1.143q.09.083.176.171a3 3 0 0 1 .176-.17C12.72-3.042 23.333 4.867 8 15'/></svg>",
-    ...
-}     
-```
+`requiresPrinterObject` is optional — set it and the panel hides on a printer
+that does not report that Klipper object, rather than showing an empty card.
+
+## What the host gives you
+
+Three props: `panelConfig` (your registration entry), `panelStore` (Mainsail's
+Vuex store) and `panelSocket` (the Moonraker websocket). `$store`, `$socket`,
+`$i18n` and `$vuetify` also resolve, and every `v-*` component is available
+without importing anything, because the plugin shares Mainsail's Vue.
+
+## Four things that will bite you
+
+**Build as `.js`, not `.mjs`.** nginx on a Klipper host has no mapping for
+`.mjs` and serves it as `application/octet-stream`; browsers refuse to execute
+a module with a non-JavaScript MIME type. The only symptom is
+`Failed to fetch dynamically imported module`.
+
+**Keep the aliases in `vite.config.ts`.** They point `vue` and the decorator
+packages at `shims/`, which read Mainsail's copies off `window`. Bundle your
+own Vue instead and it will not share reactivity with the host, so nothing
+updates.
+
+**`experimentalDecorators` is needed in both `tsconfig.json` and
+`esbuild.tsconfigRaw`** — esbuild does not read your tsconfig for per-file
+transforms. Without it decorators are emitted untranspiled and the browser
+cannot parse the bundle.
+
+**Keep `inlineCss()` in the build** if your panel has styles. Nothing reads a
+plugin's asset manifest, so a sibling `.css` is never requested.

@@ -10,6 +10,7 @@ export interface RootState {
     naviDrawer: boolean | null
     instancesDB: 'moonraker' | 'browser' | 'json'
     configInstances: ConfigJsonInstance[]
+    configCustomPanels: ConfigJsonCustomPanel[]
 
     socket?: SocketState
     gui?: GuiState
@@ -41,11 +42,19 @@ export interface ConfigJsonInstance {
 }
 
 export interface ConfigJsonCustomPanel {
-    id: string;
-    title: string;
-    icon: string;
-    entryUrl: string;
-    collapsible: boolean;
+    id: string
+    title: string
+    icon: string
+    entryUrl: string
+    collapsible: boolean
+    /*
+     * Optional name of a Klipper object this panel needs, e.g. 'autoloader'.
+     * When set, the panel is hidden on a printer that does not report that
+     * object, the same way the spoolman and mmu panels hide themselves.
+     * Without it a hardware-specific plugin still renders its frame on every
+     * printer, leaving an empty card the user cannot remove.
+     */
+    requiresPrinterObject?: string
 }
 
 export interface Theme {

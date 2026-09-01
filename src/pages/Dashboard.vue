@@ -7,7 +7,6 @@
                     <component
                         :is="extractPanelName(component.name)"
                         :key="'dashboard-mobileLayout-' + component.name"
-                        :config="component.config"
                         :panel-id="extractPanelId(component.name)"></component>
                 </template>
             </v-col>
@@ -19,7 +18,6 @@
                     <component
                         :is="extractPanelName(component.name)"
                         :key="'dashboard-tabletLayout1-' + component.name"
-                        :config="component.config"
                         :panel-id="extractPanelId(component.name)"></component>
                 </template>
             </v-col>
@@ -28,7 +26,6 @@
                     <component
                         :is="extractPanelName(component.name)"
                         :key="'dashboard-tabletLayout2-' + component.name"
-                        :config="component.config"
                         :panel-id="extractPanelId(component.name)"></component>
                 </template>
             </v-col>
@@ -40,7 +37,6 @@
                     <component
                         :is="extractPanelName(component.name)"
                         :key="'dashboard-desktopLayout1-' + component.name"
-                        :config="component.config"
                         :panel-id="extractPanelId(component.name)"></component>
                 </template>
             </v-col>
@@ -49,7 +45,6 @@
                     <component
                         :is="extractPanelName(component.name)"
                         :key="'dashboard-desktopLayout2-' + component.name"
-                        :config="component.config"
                         :panel-id="extractPanelId(component.name)"></component>
                 </template>
             </v-col>
@@ -61,7 +56,6 @@
                     <component
                         :is="extractPanelName(component.name)"
                         :key="'dashboard-desktopLayout1-' + component.name"
-                        :config="component.config"
                         :panel-id="extractPanelId(component.name)"></component>
                 </template>
             </v-col>
@@ -70,7 +64,6 @@
                     <component
                         :is="extractPanelName(component.name)"
                         :key="'dashboard-desktopLayout2-' + component.name"
-                        :config="component.config"
                         :panel-id="extractPanelId(component.name)"></component>
                 </template>
             </v-col>
@@ -79,7 +72,6 @@
                     <component
                         :is="extractPanelName(component.name)"
                         :key="'dashboard-desktopLayout3-' + component.name"
-                        :config="component.config"
                         :panel-id="extractPanelId(component.name)"></component>
                 </template>
             </v-col>
@@ -96,6 +88,7 @@ import DashboardMixin from '@/components/mixins/dashboard'
 import KlippyStatePanel from '@/components/panels/KlippyStatePanel.vue'
 import LedEffectsPanel from '@/components/panels/LedEffectsPanel.vue'
 import MachineSettingsPanel from '@/components/panels/MachineSettingsPanel.vue'
+import CustomPanel from '@/components/panels/CustomPanel.vue'
 import MacrogroupPanel from '@/components/panels/MacrogroupPanel.vue'
 import MacrosPanel from '@/components/panels/MacrosPanel.vue'
 import MiniconsolePanel from '@/components/panels/MiniconsolePanel.vue'
@@ -107,7 +100,6 @@ import StatusPanel from '@/components/panels/StatusPanel.vue'
 import ToolheadControlPanel from '@/components/panels/ToolheadControlPanel.vue'
 import TemperaturePanel from '@/components/panels/TemperaturePanel.vue'
 import WebcamPanel from '@/components/panels/WebcamPanel.vue'
-import CustomPanel from '@/components/panels/CustomPanel.vue'
 
 @Component({
     components: {
@@ -116,6 +108,7 @@ import CustomPanel from '@/components/panels/CustomPanel.vue'
         KlippyStatePanel,
         LedEffectsPanel,
         MachineSettingsPanel,
+        CustomPanel,
         MacrogroupPanel,
         MacrosPanel,
         MiniconsolePanel,
@@ -127,7 +120,6 @@ import CustomPanel from '@/components/panels/CustomPanel.vue'
         ToolheadControlPanel,
         TemperaturePanel,
         WebcamPanel,
-        CustomPanel,
     },
 })
 export default class PageDashboard extends Mixins(DashboardMixin) {
@@ -168,7 +160,9 @@ export default class PageDashboard extends Mixins(DashboardMixin) {
     }
 
     extractPanelId(name: string) {
-        return name.split('_')[1] ?? null
+        const separator = name.indexOf('_')
+
+        return separator === -1 ? null : name.slice(separator + 1)
     }
 }
 </script>

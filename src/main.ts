@@ -7,6 +7,7 @@ import i18n, { setAndLoadLocale } from '@/plugins/i18n'
 import store from '@/store'
 import router from '@/plugins/router'
 import { WebSocketPlugin } from '@/plugins/webSocketClient'
+import { installPluginRuntime } from '@/plugins/pluginRuntime'
 // vue-observe-visibility
 import { ObserveVisibility } from 'vue-observe-visibility'
 //vue-load-image
@@ -54,6 +55,10 @@ Vue.use(OverlayScrollbarsPlugin, {
 
 use([SVGRenderer, LineChart, BarChart, LegendComponent, PieChart, DatasetComponent, GridComponent, TooltipComponent])
 Vue.component('EChart', ECharts)
+
+// Publish the shared runtime before anything can load a plugin, so a panel
+// that resolves early still finds it.
+installPluginRuntime()
 
 const initLoad = async () => {
     try {

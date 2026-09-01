@@ -2,7 +2,7 @@ import { GetterTree } from 'vuex'
 import { GuiState, GuiStateDashboard, GuiStateLayoutoption } from '@/store/gui/types'
 import { GuiMacrosStateMacrogroup } from '@/store/gui/macros/types'
 import { allDashboardPanels, defaultTheme, themes } from '@/store/variables'
-import { RootState, Theme } from '@/store/types'
+import { ConfigJsonCustomPanel, RootState, Theme } from '@/store/types'
 
 export const getters: GetterTree<GuiState, RootState> = {
     theme: (state): string => {
@@ -106,9 +106,14 @@ export const getters: GetterTree<GuiState, RootState> = {
             allPanels = allPanels.filter((name) => name !== 'led-effects')
         }
 
-        if (state.view.customPanels.length > 0) {
-            allPanels.push('custom');
-        }
+        // One entry per panel, named custom_<id>, the same shape macrogroups
+        // use above. The name carries the identity, so everything keyed on it
+        // -- layout placement, pruning, visibility, collapse state -- works
+        // without knowing custom panels exist.
+        const customPanels = getters['getAvailableCustomPanels'] as ConfigJsonCustomPanel[]
+        customPanels.forEach((panel) => {
+            allPanels.push('custom_' + panel.id)
+        })
 
         return allPanels
     },
@@ -197,7 +202,61 @@ export const getters: GetterTree<GuiState, RootState> = {
         return false
     },
 
-    getCustomPanels: (state) => {
-        return state.view.customPanels;
+    getAvailableCustomPanels: (state, getters, rootState) => {
+        const panels = getters['getCustomPanels'] as ConfigJsonCustomPanel[]
+
+        return panels.filter((panel) => {
+            if (!panel.requiresPrinterObject) return true
+
+            // Match the bare name or a prefixed section: klipper reports many
+            // objects as "<kind> <name>" (led_effect foo, sa_encoder 0), and an
+            // exact key lookup would never see those.
+            const required = panel.requiresPrinterObject
+            const objects = Object.keys(rootState.printer ?? {})
+
+            return objects.some((name) => name === required || name.startsWith(required + ' '))
+        })
+    },
+
+    /*
+     * Custom panels come from two places and both are valid at once:
+     *
+     *   config.json      deployment level, in Mainsail's web root. Good for
+     *                    Docker images and kiosks that ship a fixed set of
+     *                    panels. NOT durable: moonraker's update manager
+     *                    wipes the web root on a client update unless the
+     *                    file is listed under persistent_files, and the
+     *                    documented config for Mainsail does not list it.
+     *
+     *   Moonraker DB     the "mainsail" namespace, loaded by gui/init. This
+     *                    is the durable option and the one a plugin's
+     *                    installer should write to, since it survives both
+     *                    Mainsail updates and a reflash of the web root.
+     *
+     * Merged by id, with config.json taking precedence so an administrator
+     * can pin or override an entry that would otherwise come from the
+     * database.
+     */
+    /*
+     * The subset of custom panels this printer can actually show.
+     *
+     * A panel may declare `requiresPrinterObject`, naming a Klipper object it
+     * depends on. Built-in panels do the same thing further up this getter --
+     * spoolman disappears without the moonraker component, mmu without Happy
+     * Hare -- and a plugin has no way to express that on its own: the host
+     * draws the panel frame before the plugin is even fetched, so a panel for
+     * absent hardware would render as an empty card on every other printer.
+     *
+     * Kept separate from getCustomPanels, which stays the list of everything
+     * CONFIGURED. Pruning saved layouts uses that one, so a panel does not
+     * lose its position while its hardware is briefly missing -- during a
+     * klippy restart, printer objects are gone but the layout must survive.
+     */
+    getCustomPanels: (state, getters, rootState) => {
+        const fromDatabase = state.view.customPanels ?? []
+        const fromConfigJson = rootState.configCustomPanels ?? []
+        const configIds = fromConfigJson.map((panel) => panel.id)
+
+        return [...fromConfigJson, ...fromDatabase.filter((panel) => !configIds.includes(panel.id))]
     },
 }

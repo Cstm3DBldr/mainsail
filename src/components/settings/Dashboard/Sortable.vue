@@ -26,7 +26,6 @@
                         v-for="element in layout"
                         :key="`item-${element.name}`"
                         :name="element.name"
-                        :panel-config="element.config"
                         :visible="element.visible"
                         @change-visible="changeVisible" />
                 </transition-group>

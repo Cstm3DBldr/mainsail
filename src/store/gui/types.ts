@@ -1,3 +1,4 @@
+import { ConfigJsonCustomPanel } from '@/store/types'
 import { GuiMacrosState } from '@/store/gui/macros/types'
 import { GuiConsoleState } from '@/store/gui/console/types'
 import { GuiPresetsState } from '@/store/gui/presets/types'
@@ -220,17 +221,8 @@ export interface GuiState {
             showClimate: boolean
             showUnavailableSpoolColor: boolean
         }
-        customPanels: GuiStateCustomPanel[]
+        customPanels: ConfigJsonCustomPanel[]
     }
-}
-
-export interface GuiStateCustomPanel {
-    [index: string]: unknown;
-    id: string;
-    title: string;
-    icon: string;
-    entryUrl: string;
-    collapsible: boolean;
 }
 
 export interface GuiStateDashboard {
@@ -252,10 +244,6 @@ export type GuiStateDashboardLayoutKey = Exclude<keyof GuiStateDashboard, 'nonEx
 export interface GuiStateLayoutoption {
     name: string
     visible: boolean
-    config?: {
-        id?: string;
-        [key: string]: unknown;
-    }
 }
 
 export type GuiStateUiSettingsDashboardFilesFilter = 'new' | 'failed' | 'completed'
