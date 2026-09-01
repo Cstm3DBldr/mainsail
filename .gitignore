@@ -21,3 +21,6 @@ cypress/screenshots/
 cypress/videos/
 components.d.ts
 i18n-extract
+
+# Local manifest override (points at a worktree build)
+scripts/deploy-plugins.local.json
