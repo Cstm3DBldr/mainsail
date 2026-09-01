@@ -45,7 +45,13 @@ export default defineConfig({
             entry: 'src/main.ts',
             name: 'ExamplePanelPlugin',
             formats: ['es'],
-            fileName: () => 'example-panel-plugin.mjs',
+        // Built as .js, not .mjs, on purpose. A plugin is fetched with a
+        // dynamic import, and browsers refuse to execute a module served with
+        // a non-JavaScript MIME type. nginx as shipped on a standard Klipper
+        // host has no mapping for .mjs and serves it as application/octet-stream,
+        // so an .mjs plugin fails to load with nothing but a generic "failed to
+        // fetch dynamically imported module". .js is mapped everywhere.
+            fileName: () => 'example-panel-plugin.js',
         },
     },
 })

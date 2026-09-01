@@ -3,7 +3,7 @@
     "version": "1.0.0",
     "description": "Diagnostic panel that verifies a Mainsail host's plugin support",
     "type": "module",
-    "main": "./dist/plugin-smoke-test.mjs",
+    "main": "./dist/plugin-smoke-test.js",
     "scripts": {
         "dev": "vite",
         "build": "vite build",

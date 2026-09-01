@@ -20,6 +20,7 @@ set -euo pipefail
 HOST="${1:-}"
 USER_NAME="${2:-pi}"
 PLUGIN="plugin-smoke-test"
+PLUGIN_EXT="js"
 
 if [[ -z "$HOST" ]]; then
     echo "ERROR: no printer given."
@@ -43,7 +44,7 @@ if [[ ! -f "$REPO_ROOT/dist/index.html" ]]; then
 fi
 echo "  ok  mainsail build present"
 
-PLUGIN_FILE="$REPO_ROOT/plugins/PluginSmokeTest/dist/${PLUGIN}.mjs"
+PLUGIN_FILE="$REPO_ROOT/plugins/PluginSmokeTest/dist/${PLUGIN}.${PLUGIN_EXT}"
 if [[ ! -f "$PLUGIN_FILE" ]]; then
     echo "ERROR: no plugin build found at $PLUGIN_FILE"
     echo "Build it first:  cd '$REPO_ROOT/plugins/PluginSmokeTest' && npm install && npm run build"
@@ -64,9 +65,11 @@ if ! ssh "$SSH" "test -d ~/mainsail"; then
 fi
 echo "  ok  mainsail web root found"
 
-MOONRAKER_PORT="$(ssh "$SSH" "grep -oP '(?<=^port:\s)\d+' ~/printer_data/config/moonraker.conf 2>/dev/null | head -1" || true)"
-MOONRAKER_PORT="${MOONRAKER_PORT:-7125}"
-echo "  ok  moonraker port ${MOONRAKER_PORT}"
+# The printer's own config.json is the only thing that knows how this
+# install reaches Moonraker, so grab it before the web root is touched.
+ORIG_CONFIG="$(mktemp)"
+trap 'rm -f "$ORIG_CONFIG"' EXIT
+ssh "$SSH" "cat ~/mainsail/config.json 2>/dev/null" > "$ORIG_CONFIG" || true
 
 # ---------------------------------------------------------------- backup ---
 say "Backing up the existing Mainsail"
@@ -83,32 +86,55 @@ echo "  copied $(find "$REPO_ROOT/dist" -type f | wc -l | tr -d ' ') files"
 say "Copying the plugin"
 ssh "$SSH" "mkdir -p ~/mainsail/plugins"
 scp -q "$PLUGIN_FILE" "$SSH:~/mainsail/plugins/"
-echo "  ~/mainsail/plugins/${PLUGIN}.mjs"
+echo "  ~/mainsail/plugins/${PLUGIN}.${PLUGIN_EXT}"
 
-# The panel is registered in config.json rather than the Moonraker database
-# because this is a throwaway test bench: config.json is one file, needs no
-# database write, and is wiped by the same update that would wipe the build
-# it belongs to. A real install should use the database instead.
+# Register the panel by ADDING to the printer's existing config.json rather
+# than writing a fresh one. Connection settings in particular must be left
+# alone: a stock Klipper install leaves hostname/port null so the browser
+# talks to its own origin and nginx reverse-proxies through to Moonraker.
+# Pinning them to host:7125 instead makes the browser cross-origin, which
+# Moonraker's cors_domains will not usually allow -- the symptom is Mainsail
+# loading fine and then reporting it cannot connect to Moonraker.
+#
+# config.json is used rather than the Moonraker database because this is a
+# throwaway test bench: one file, no database write, and it is wiped by the
+# same update that would wipe the build it belongs to. A real install should
+# register through the database instead.
 say "Registering the panel"
-ssh "$SSH" "cat > ~/mainsail/config.json" <<JSON
-{
-    "hostname": "${HOST}",
-    "port": ${MOONRAKER_PORT},
-    "path": null,
-    "instancesDB": "moonraker",
-    "instances": [],
-    "customPanels": [
-        {
-            "id": "smoketest",
-            "title": "Plugin smoke test",
-            "icon": "",
-            "entryUrl": "/plugins/${PLUGIN}.mjs",
-            "collapsible": true
-        }
-    ]
+MERGED_CONFIG="$(mktemp)"
+trap 'rm -f "$ORIG_CONFIG" "$MERGED_CONFIG"' EXIT
+
+python3 - "$ORIG_CONFIG" "$PLUGIN" > "$MERGED_CONFIG" <<'PYEOF'
+import json, sys
+
+path, plugin = sys.argv[1], sys.argv[2]
+
+try:
+    with open(path, encoding="utf-8") as fh:
+        config = json.load(fh)
+except Exception:
+    # No readable config on the printer: fall back to an empty one, which
+    # leaves hostname/port absent and so still same-origin.
+    config = {}
+
+panel = {
+    "id": "smoketest",
+    "title": "Plugin smoke test",
+    "icon": "",
+    "entryUrl": "/plugins/%s.mjs" % plugin,
+    "collapsible": True,
 }
-JSON
-echo "  config.json written, entryUrl /plugins/${PLUGIN}.mjs"
+
+panels = [p for p in config.get("customPanels", []) if p.get("id") != panel["id"]]
+panels.append(panel)
+config["customPanels"] = panels
+
+json.dump(config, sys.stdout, indent=4)
+PYEOF
+
+scp -q "$MERGED_CONFIG" "$SSH:~/mainsail/config.json"
+echo "  panel added to config.json, entryUrl /plugins/${PLUGIN}.${PLUGIN_EXT}"
+echo "  connection settings left as the printer had them"
 
 # ----------------------------------------------------------------- check ---
 # A status code is not enough here. Mainsail is a single-page app, so nginx
@@ -149,7 +175,7 @@ check() {
 }
 
 check "/config.json" "customPanels"
-check "/plugins/${PLUGIN}.mjs" "__mainsail_plugin_runtime__"
+check "/plugins/${PLUGIN}.${PLUGIN_EXT}" "__mainsail_plugin_runtime__"
 
 if [[ "$fetch_ok" -eq 0 ]]; then
     echo
