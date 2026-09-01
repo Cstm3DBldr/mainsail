@@ -1,0 +1,10 @@
+{
+    "en": {
+        "Panels": {
+            "PluginSmokeTestPanel": {
+                "Headline": "Plugin smoke test",
+                "LocaleProof": "Loaded from the plugin's own locale bundle"
+            }
+        }
+    }
+}
