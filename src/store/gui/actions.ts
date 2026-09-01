@@ -140,6 +140,13 @@ export const actions: ActionTree<GuiState, RootState> = {
 
             commit('removeStaleCustomPanels', { viewport, configuredIds })
 
+            // Refresh what is stored for panels already placed, so the
+            // database stops carrying a stale title/icon/entryUrl. Rendering
+            // does not depend on this — getPanels reads the registration
+            // directly — but leaving a wrong copy in the database is
+            // misleading to anyone reading it.
+            commit('refreshCustomPanelConfigs', { viewport, customPanels })
+
             for (const customPanel of customPanels) {
                 const exists = panels.some(
                     (panel) => panel.name === 'custom' && panel.config?.id === customPanel.id

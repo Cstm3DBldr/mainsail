@@ -131,6 +131,40 @@ export const mutations: MutationTree<GuiState> = {
     },
 
     /*
+     * Bring stored custom panel entries back in line with the registration.
+     *
+     * The layout keeps a copy of each panel's config from when it was placed,
+     * and nothing updated it afterwards, so a changed title, icon or entryUrl
+     * left the database disagreeing with the registration indefinitely.
+     */
+    refreshCustomPanelConfigs(
+        state,
+        payload: { viewport: string; customPanels: { id: string }[] }
+    ) {
+        const layoutKeys = (Object.keys(state.dashboard) as GuiStateDashboardLayoutKey[]).filter((key) =>
+            key.startsWith(payload.viewport)
+        )
+
+        for (const layoutKey of layoutKeys) {
+            const panels = state.dashboard[layoutKey] as GuiStateLayoutoption[]
+            let changed = false
+
+            const updated = panels.map((panel) => {
+                if (panel.name !== 'custom') return panel
+
+                const current = payload.customPanels.find((entry) => entry.id === panel.config?.id)
+                if (!current || JSON.stringify(current) === JSON.stringify(panel.config)) return panel
+
+                changed = true
+
+                return { ...panel, config: { ...current } }
+            })
+
+            if (changed) Vue.set(state.dashboard, layoutKey, updated)
+        }
+    },
+
+    /*
      * Drop custom panel entries whose plugin is no longer configured.
      * Sweeps every layout belonging to the viewport (e.g. desktopLayout1,
      * desktopLayout2, ...) because the user may have moved the panel

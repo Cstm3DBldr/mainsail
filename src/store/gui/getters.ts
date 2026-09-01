@@ -165,16 +165,37 @@ export const getters: GetterTree<GuiState, RootState> = {
 
             // Every custom panel shares the name 'custom', so the check above
             // cannot tell them apart. Filter the unavailable ones out by id.
-            const availableIds = (getters['getAvailableCustomPanels'] as ConfigJsonCustomPanel[]).map(
-                (panel) => panel.id
-            )
+            const available = getters['getAvailableCustomPanels'] as ConfigJsonCustomPanel[]
+            const availableIds = available.map((panel) => panel.id)
 
-            return panels.filter((element) => {
-                if (!allPossiblePanels.includes(element.name)) return false
-                if (element.name !== 'custom') return true
+            return panels
+                .filter((element) => {
+                    if (!allPossiblePanels.includes(element.name)) return false
+                    if (element.name !== 'custom') return true
 
-                return availableIds.includes(element.config?.id ?? '')
-            })
+                    return availableIds.includes(element.config?.id ?? '')
+                })
+                .map((element) => {
+                    if (element.name !== 'custom') return element
+
+                    /*
+                     * Render from the CURRENT registration, not the copy that
+                     * was written into the layout when the panel was first
+                     * placed.
+                     *
+                     * The layout is persisted, and initCustomPanels only adds
+                     * entries that are missing — so that copy was never
+                     * refreshed. Editing a panel's title or icon appeared to do
+                     * nothing, and editing its entryUrl was worse: the panel
+                     * kept loading the old bundle, or a URL that no longer
+                     * resolved, with the registration plainly showing the new
+                     * one. The id is the only part of the stored config worth
+                     * trusting; everything else lives in the registration.
+                     */
+                    const current = available.find((panel) => panel.id === element.config?.id)
+
+                    return current ? { ...element, config: current } : element
+                })
         },
 
     getAllPanelsFromViewport: (state) => (viewport: string) => {
