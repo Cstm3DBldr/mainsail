@@ -1,0 +1,18 @@
+{
+    "en": {
+        "Panels": {
+            "ExamplePanelPlugin": {
+                "Readings": "Readings",
+                "Actions": "Actions",
+                "KlipperState": "Klipper state",
+                "HomedAxes": "Homed axes",
+                "Extruder": "Extruder",
+                "QueryStatus": "Query status",
+                "HomeAll": "Home all",
+                "PrinterNotReady": "Klipper is not ready, so these controls are disabled.",
+                "BusyPrinting": "Disabled while a print is running.",
+                "LastSent": "Last sent:"
+            }
+        }
+    }
+}
