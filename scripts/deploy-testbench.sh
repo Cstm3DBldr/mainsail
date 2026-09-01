@@ -100,6 +100,19 @@ echo "  ~/mainsail/plugins/${PLUGIN}.${PLUGIN_EXT}"
 # throwaway test bench: one file, no database write, and it is wiped by the
 # same update that would wipe the build it belongs to. A real install should
 # register through the database instead.
+# Mainsail ships as a PWA. A browser that has used this printer before holds
+# a service worker precaching the OLD build, and it keeps serving it after the
+# web root is replaced -- so the tester sees a Mainsail with no custom-panel
+# code, where the panel is missing AND there is no setting to enable it. That
+# looks like the plugin failed rather than like a cache, and a hard refresh
+# does not reliably clear it. Replacing sw.js with one that unregisters itself
+# makes the stale worker uninstall on the next visit. A test bench has no use
+# for offline precaching.
+say "Neutralising the old service worker"
+scp -q "${REPO_ROOT}/scripts/testbench-sw.js" "$SSH:~/mainsail/sw.js"
+ssh "$SSH" "rm -f ~/mainsail/workbox-*.js" 2>/dev/null || true
+echo "  sw.js replaced with a self-uninstalling worker"
+
 say "Registering the panel"
 MERGED_CONFIG="$(mktemp)"
 trap 'rm -f "$ORIG_CONFIG" "$MERGED_CONFIG"' EXIT
@@ -187,8 +200,15 @@ fi
 
 say "Done"
 cat <<EOF
-Open  ${BASE}  in a browser and hard-refresh (Ctrl+Shift+R) -- the old
-bundle is cached and the filenames may not have changed.
+Open  ${BASE}  in a browser.
+
+If you have used this printer before, open it in a PRIVATE window first.
+Mainsail is a PWA, and a previously-installed service worker can keep
+serving the old bundle -- which shows no panel and no setting to enable
+one, because that build has no custom-panel code. A private window has no
+service worker and shows the truth immediately. The deployed sw.js
+uninstalls the old worker on the next visit, so a normal window catches up
+after a reload or two.
 
 The dashboard should show a "Plugin smoke test" panel. Every chip in its
 Runtime row should be green. If the panel is missing entirely, the host
