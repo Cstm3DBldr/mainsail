@@ -47,6 +47,14 @@ export interface ConfigJsonCustomPanel {
     icon: string;
     entryUrl: string;
     collapsible: boolean;
+    /*
+     * Optional name of a Klipper object this panel needs, e.g. 'autoloader'.
+     * When set, the panel is hidden on a printer that does not report that
+     * object, the same way the spoolman and mmu panels hide themselves.
+     * Without it a hardware-specific plugin still renders its frame on every
+     * printer, leaving an empty card the user cannot remove.
+     */
+    requiresPrinterObject?: string;
 }
 
 export interface Theme {

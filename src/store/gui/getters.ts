@@ -110,7 +110,7 @@ export const getters: GetterTree<GuiState, RootState> = {
         // entries restored from the database, so a panel declared in
         // config.json would never reach allPanels and getPanels would filter
         // it straight back out of every layout.
-        if ((getters['getCustomPanels'] as ConfigJsonCustomPanel[]).length > 0) {
+        if ((getters['getAvailableCustomPanels'] as ConfigJsonCustomPanel[]).length > 0) {
             allPanels.push('custom')
         }
 
@@ -163,7 +163,18 @@ export const getters: GetterTree<GuiState, RootState> = {
                 }
             }
 
-            return panels.filter((element) => allPossiblePanels.includes(element.name))
+            // Every custom panel shares the name 'custom', so the check above
+            // cannot tell them apart. Filter the unavailable ones out by id.
+            const availableIds = (getters['getAvailableCustomPanels'] as ConfigJsonCustomPanel[]).map(
+                (panel) => panel.id
+            )
+
+            return panels.filter((element) => {
+                if (!allPossiblePanels.includes(element.name)) return false
+                if (element.name !== 'custom') return true
+
+                return availableIds.includes(element.config?.id ?? '')
+            })
         },
 
     getAllPanelsFromViewport: (state) => (viewport: string) => {
@@ -220,6 +231,31 @@ export const getters: GetterTree<GuiState, RootState> = {
      * can pin or override an entry that would otherwise come from the
      * database.
      */
+    /*
+     * The subset of custom panels this printer can actually show.
+     *
+     * A panel may declare `requiresPrinterObject`, naming a Klipper object it
+     * depends on. Built-in panels do the same thing further up this getter --
+     * spoolman disappears without the moonraker component, mmu without Happy
+     * Hare -- and a plugin has no way to express that on its own: the host
+     * draws the panel frame before the plugin is even fetched, so a panel for
+     * absent hardware would render as an empty card on every other printer.
+     *
+     * Kept separate from getCustomPanels, which stays the list of everything
+     * CONFIGURED. Pruning saved layouts uses that one, so a panel does not
+     * lose its position while its hardware is briefly missing -- during a
+     * klippy restart, printer objects are gone but the layout must survive.
+     */
+    getAvailableCustomPanels: (state, getters, rootState) => {
+        const panels = getters['getCustomPanels'] as ConfigJsonCustomPanel[]
+
+        return panels.filter((panel) => {
+            if (!panel.requiresPrinterObject) return true
+
+            return panel.requiresPrinterObject in (rootState.printer ?? {})
+        })
+    },
+
     getCustomPanels: (state, getters, rootState) => {
         const fromDatabase = state.view.customPanels ?? []
         const fromConfigJson = rootState.configCustomPanels ?? []
