@@ -56,7 +56,10 @@ PLUGIN_FILES=()
 PLUGIN_NAMES=()
 while IFS= read -r rel; do
     [[ -z "$rel" ]] && continue
-    if [[ "$rel" = /* ]]; then abs="$rel"; else abs="$REPO_ROOT/$rel"; fi
+    # Absolute means a leading slash, or a Windows drive letter -- a manifest
+    # written on Windows may carry "C:/..." paths, and treating one as relative
+    # silently produces a nonsense path under the repo root.
+    if [[ "$rel" = /* || "$rel" == ?:/* ]]; then abs="$rel"; else abs="$REPO_ROOT/$rel"; fi
     if [[ ! -f "$abs" ]]; then
         echo "ERROR: a plugin in the manifest is not built: $rel"
         echo "Build it, then re-run. Looked for: $abs"
@@ -68,7 +71,7 @@ while IFS= read -r rel; do
 done < <(python3 -c "
 import json, sys
 for entry in json.load(open(sys.argv[1], encoding='utf-8')):
-    print(entry['file'])
+    sys.stdout.buffer.write((entry['file'] + chr(10)).encode('utf-8'))
 " "$MANIFEST")
 
 if ! ssh -o ConnectTimeout=10 -o BatchMode=yes "$SSH" true 2>/dev/null; then
@@ -105,9 +108,32 @@ echo "  to undo:  ssh ${SSH} 'rm -rf ~/mainsail && mv ~/mainsail.bak.${STAMP} ~/
 # host:7125 makes the browser cross-origin, which moonraker's cors_domains
 # usually rejects -- Mainsail then loads and reports it cannot connect.
 say "Copying the Mainsail build"
-ssh "$SSH" "find ~/mainsail -mindepth 1 -maxdepth 1 ! -name config.json -exec rm -rf {} +"
+
+# Take a copy of the printer's config.json before anything touches the web
+# root, and put it back afterwards.
+#
+# Excluding it from the wipe is not enough: dist/ contains its own
+# config.json, built from this repo's public/ directory, and the copy below
+# lands on top. That file carries whatever the developer's sandbox was
+# pointing at -- which on the first run of this script meant a printer got
+# hostname/port pinned to :7125 (cross-origin, so moonraker's cors_domains
+# rejected the websocket and Mainsail could not connect) and an entryUrl
+# pointing at a plugin host on the developer's own machine.
+CONFIG_BACKUP="$(mktemp)"
+trap 'rm -f "$CONFIG_BACKUP"' EXIT
+if ssh "$SSH" "test -f ~/mainsail/config.json"; then
+    ssh "$SSH" "cat ~/mainsail/config.json" > "$CONFIG_BACKUP"
+fi
+
+ssh "$SSH" "find ~/mainsail -mindepth 1 -maxdepth 1 -exec rm -rf {} +"
 scp -q -r "$REPO_ROOT/dist/." "$SSH:~/mainsail/"
-echo "  copied $(find "$REPO_ROOT/dist" -type f | wc -l | tr -d ' ') files, kept config.json"
+
+if [[ -s "$CONFIG_BACKUP" ]]; then
+    scp -q "$CONFIG_BACKUP" "$SSH:~/mainsail/config.json"
+    echo "  copied $(find "$REPO_ROOT/dist" -type f | wc -l | tr -d ' ') files, restored the printer's own config.json"
+else
+    echo "  copied $(find "$REPO_ROOT/dist" -type f | wc -l | tr -d ' ') files (printer had no config.json)"
+fi
 
 # Mainsail ships as a PWA. A browser that has used this printer before may
 # hold a service worker precaching the OLD build and keep serving it, so the
@@ -188,6 +214,23 @@ check() {
         echo "  ok   ${path}"
     fi
 }
+
+# The printer's own connection settings must have survived. A config.json
+# carrying the developer's sandbox values is the difference between a working
+# install and one that cannot reach moonraker at all.
+SERVED_HOST="$(curl -s --max-time 10 "${BASE}/config.json" | python3 -c "
+import json, sys
+try:
+    print(json.load(sys.stdin).get('hostname'))
+except Exception:
+    print('unreadable')
+")"
+if [[ "$SERVED_HOST" == "127.0.0.1" || "$SERVED_HOST" == "localhost" ]]; then
+    echo "  FAIL config.json hostname is '${SERVED_HOST}' -- a sandbox value was deployed."
+    fetch_ok=0
+else
+    echo "  ok   config.json kept the printer's own connection settings"
+fi
 
 for name in "${PLUGIN_NAMES[@]}"; do
     check "/plugins/${name}" "__mainsail_plugin_runtime__"
