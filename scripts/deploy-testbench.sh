@@ -111,19 +111,53 @@ JSON
 echo "  config.json written, entryUrl /plugins/${PLUGIN}.mjs"
 
 # ----------------------------------------------------------------- check ---
+# A status code is not enough here. Mainsail is a single-page app, so nginx
+# falls back to index.html for anything it cannot find -- a missing plugin
+# comes back as 200 with HTML in it, and the browser then fails on a dynamic
+# import of something that is not JavaScript. So check what came back, not
+# just that something did.
 say "Verifying over http"
 BASE="http://${HOST}"
-for path in "/config.json" "/plugins/${PLUGIN}.mjs"; do
-    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "${BASE}${path}" || echo 000)"
-    if [[ "$code" == "200" ]]; then
-        echo "  ok  ${path} -> 200"
-    else
-        echo "  WARNING: ${path} -> ${code}"
-        echo "  The files are in place but the web server is not serving them as expected."
-        echo "  Check nginx's root for this site; some installs serve /home/${USER_NAME}/mainsail"
-        echo "  from a different path than the one we just wrote to."
+fetch_ok=1
+
+check() {
+    local path="$1" expect="$2"
+    local body
+    body="$(curl -s --max-time 10 "${BASE}${path}" || true)"
+
+    if [[ -z "$body" ]]; then
+        echo "  FAIL ${path} -- empty response"
+        fetch_ok=0
+        return
     fi
-done
+
+    if grep -qi "<!doctype html" <<<"$body"; then
+        echo "  FAIL ${path} -- got index.html back, so the file is not actually there."
+        echo "       nginx served its single-page fallback. The likely cause is that"
+        echo "       this site's web root is not the ~/mainsail we just wrote to."
+        fetch_ok=0
+        return
+    fi
+
+    if ! grep -q "$expect" <<<"$body"; then
+        echo "  FAIL ${path} -- served, but the content is not what we deployed."
+        fetch_ok=0
+        return
+    fi
+
+    echo "  ok   ${path}"
+}
+
+check "/config.json" "customPanels"
+check "/plugins/${PLUGIN}.mjs" "__mainsail_plugin_runtime__"
+
+if [[ "$fetch_ok" -eq 0 ]]; then
+    echo
+    echo "Deployment landed on disk but is not being served correctly."
+    echo "Find the real web root with:"
+    echo "  ssh ${SSH} \"grep -r root /etc/nginx/sites-enabled/\""
+    exit 1
+fi
 
 say "Done"
 cat <<EOF
